@@ -255,12 +255,15 @@ SEO Data:
 Return ONLY this JSON:
 {"seoScore":1-10,"overallScore":1-10,"seoIssues":["issue1","issue2"],"improvements":["fix1","fix2"],"summary":"2 sentence summary"}`;
 
-    const completion = await groq.chat.completions.create({
-      messages: [{ role: "user", content: prompt }],
-      model: "openai/gpt-oss-20b",
-      temperature: 0.3,
-      max_tokens: 500
-    });
+    const completion = await Promise.race([
+      groq.chat.completions.create({
+        messages: [{ role: "user", content: prompt }],
+        model: "openai/gpt-oss-20b",
+        temperature: 0.3,
+        max_tokens: 500
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 15000))
+    ]);
 
     const content = completion.choices[0].message.content;
     if (!content) return null;
@@ -386,12 +389,16 @@ app.post("/api/enrich", async (req, res) => {
         }
 
         // SEO analysis
-        enrichment.seoData = await analyzeWebsiteSEO(enrichment.website);
+        try {
+          enrichment.seoData = await analyzeWebsiteSEO(enrichment.website);
+        } catch { enrichment.seoData = null; }
 
         // SEO scoring via Groq
-        if (enrichment.seoData) {
-          enrichment.seoScores = await groqScoreSEO({ ...lead, website: enrichment.website }, enrichment.seoData);
-        }
+        try {
+          if (enrichment.seoData && groq) {
+            enrichment.seoScores = await groqScoreSEO({ ...lead, website: enrichment.website }, enrichment.seoData);
+          }
+        } catch { enrichment.seoScores = null; }
 
       } catch { /* website not reachable */ }
     }
