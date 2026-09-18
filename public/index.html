@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeadScraper AI</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    :root {
+      --bg: #0a0a0f;
+      --card: #12121a;
+      --border: #1e1e2e;
+      --accent: #6366f1;
+      --accent2: #8b5cf6;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #eab308;
+      --text: #e4e4e7;
+      --muted: #71717a;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    
+    .gradient-bg {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: 
+        radial-gradient(ellipse at 20% 0%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 100%, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+    
+    header h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+    }
+    
+    header p {
+      color: var(--muted);
+      font-size: 1.1rem;
+    }
+    
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 2rem;
+      background: var(--card);
+      padding: 0.5rem;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+    
+    .tab {
+      flex: 1;
+      padding: 0.875rem 1rem;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+    
+    .tab:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+    .tab.active { background: var(--accent); color: white; }
+    
+    .panel {
+      display: none;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+    }
+    
+    .panel.active { display: block; animation: fadeIn 0.3s ease; }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    
+    .form-group.full { grid-column: 1 / -1; }
+    
+    label {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    input, textarea {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      color: var(--text);
+      font-size: 0.95rem;
+      transition: border-color 0.2s;
+    }
+    
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+    
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.875rem 2rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: white;
+      width: 100%;
+    }
+    
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    
+    @keyframes spin { to { transform: rotate(360deg); } }
+    
+    .result {
+      margin-top: 1.5rem;
+      padding: 1.5rem;
+      background: var(--bg);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      display: none;
+    }
+    
+    .result.show { display: block; animation: fadeIn 0.3s ease; }
+    
+    .result-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    
+    .badge-green { background: rgba(34, 197, 94, 0.15); color: var(--green); }
+    .badge-red { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+    .badge-yellow { background: rgba(234, 179, 8, 0.15); color: var(--yellow); }
+    .badge-purple { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+    
+    .score-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin: 1rem 0;
+    }
+    
+    .score-track {
+      flex: 1;
+      height: 8px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    
+    .score-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+    
+    .score-fill.high { background: linear-gradient(90deg, var(--green), #4ade80); }
+    .score-fill.med { background: linear-gradient(90deg, var(--yellow), #facc15); }
+    .score-fill.low { background: linear-gradient(90deg, var(--red), #f87171); }
+    
+    .score-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      min-width: 3rem;
+      text-align: right;
+    }
+    
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    
+    .detail-item {
+      padding: 1rem;
+      background: rgba(255,255,255,0.02);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    
+    .detail-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.5rem;
+    }
+    
+    .detail-value {
+      font-size: 0.95rem;
+      word-break: break-word;
+    }
+    
+    .social-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    
+    .social-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.4rem 0.8rem;
+      background: rgba(99, 102, 241, 0.1);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      border-radius: 6px;
+      color: var(--accent);
+      font-size: 0.85rem;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    
+    .social-link:hover { background: rgba(99, 102, 241, 0.2); }
+    
+    .email-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    
+    .email-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      background: rgba(34, 197, 94, 0.1);
+      border-radius: 6px;
+      color: var(--green);
+      font-size: 0.9rem;
+      font-family: monospace;
+    }
+    
+    .leads-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    
+    .lead-card {
+      padding: 1rem 1.25rem;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .lead-card:hover { border-color: var(--accent); background: rgba(99, 102, 241, 0.05); }
+    .lead-card.selected { border-color: var(--accent); background: rgba(99, 102, 241, 0.1); }
+    
+    .lead-name { font-weight: 600; margin-bottom: 0.25rem; }
+    .lead-meta { font-size: 0.85rem; color: var(--muted); }
+    
+    .pipeline {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      margin: 2rem 0;
+      padding: 1rem;
+      background: rgba(99, 102, 241, 0.05);
+      border-radius: 12px;
+      border: 1px dashed var(--border);
+    }
+    
+    .pipeline-step {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: var(--card);
+      border-radius: 8px;
+      font-size: 0.85rem;
+      border: 1px solid var(--border);
+    }
+    
+    .pipeline-arrow { color: var(--muted); font-size: 1.2rem; }
+    
+    .error {
+      padding: 1rem;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      border-radius: 8px;
+      color: var(--red);
+      margin-top: 1rem;
+    }
+    
+    @media (max-width: 640px) {
+      .container { padding: 1rem; }
+      header h1 { font-size: 1.75rem; }
+      .form-grid { grid-template-columns: 1fr; }
+      .tabs { flex-direction: column; }
+      .pipeline { flex-direction: column; }
+      .pipeline-arrow { transform: rotate(90deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="gradient-bg"></div>
+  
+  <div class="container">
+    <header>
+      <h1>LeadScraper AI</h1>
+      <p>Scrape, qualify, and enrich leads with AI</p>
+    </header>
+    
+    <div class="pipeline">
+      <div class="pipeline-step">🔍 Scrape</div>
+      <span class="pipeline-arrow">→</span>
+      <div class="pipeline-step">🧠 Qualify</div>
+      <span class="pipeline-arrow">→</span>
+      <div class="pipeline-step">📡 Enrich</div>
+    </div>
+    
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('scrape')">🔍 Scrape</button>
+      <button class="tab" onclick="switchTab('filter')">🧠 Qualify</button>
+      <button class="tab" onclick="switchTab('enrich')">📡 Enrich</button>
+    </div>
+    
+    <!-- SCRAPE PANEL -->
+    <div id="panel-scrape" class="panel active">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Search Query</label>
+          <input type="text" id="scrape-query" placeholder="e.g. plumber, dentist, restaurant">
+        </div>
+        <div class="form-group">
+          <label>Location</label>
+          <input type="text" id="scrape-location" placeholder="e.g. Berlin, New York, London">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="doScrape()" id="btn-scrape">
+        Search Google Maps
+      </button>
+      <div id="scrape-result" class="result"></div>
+    </div>
+    
+    <!-- FILTER PANEL -->
+    <div id="panel-filter" class="panel">
+      <div class="form-group full">
+        <label>Paste Lead JSON</label>
+        <textarea id="filter-input" placeholder='{"name":"Test Corp","address":"123 Main St","phone":"+1234567890","rating":"4.5","reviews":"100","category":"Technology"}'></textarea>
+      </div>
+      <button class="btn btn-primary" onclick="doFilter()" id="btn-filter">
+        Qualify with AI
+      </button>
+      <div id="filter-result" class="result"></div>
+    </div>
+    
+    <!-- ENRICH PANEL -->
+    <div id="panel-enrich" class="panel">
+      <div class="form-group full">
+        <label>Paste Lead JSON</label>
+        <textarea id="enrich-input" placeholder='{"name":"Microsoft","address":"One Microsoft Way Redmond WA","url":"https://microsoft.com"}'></textarea>
+      </div>
+      <button class="btn btn-primary" onclick="doEnrich()" id="btn-enrich">
+        Find Emails & Social Profiles
+      </button>
+      <div id="enrich-result" class="result"></div>
+    </div>
+  </div>
+
+  <script>
+    const API = '';
+    
+    function switchTab(tab) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById(`panel-${tab}`).classList.add('active');
+    }
+    
+    function setLoading(btn, loading) {
+      if (loading) {
+        btn.disabled = true;
+        btn.dataset.origText = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner"></span> Processing...';
+      } else {
+        btn.disabled = false;
+        btn.innerHTML = btn.dataset.origText;
+      }
+    }
+    
+    function showError(containerId, msg) {
+      const el = document.getElementById(containerId);
+      el.classList.add('show');
+      el.innerHTML = `<div class="error">⚠️ ${msg}</div>`;
+    }
+    
+    // SCRAPE
+    async function doScrape() {
+      const btn = document.getElementById('btn-scrape');
+      const query = document.getElementById('scrape-query').value.trim();
+      const location = document.getElementById('scrape-location').value.trim();
+      
+      if (!query || !location) return showError('scrape-result', 'Please enter both query and location');
+      
+      setLoading(btn, true);
+      try {
+        const resp = await fetch(`${API}/api/scrape`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query, location })
+        });
+        const data = await resp.json();
+        
+        const el = document.getElementById('scrape-result');
+        el.classList.add('show');
+        
+        if (data.leads && data.leads.length) {
+          el.innerHTML = `
+            <div class="result-header">
+              <span class="badge badge-green">✓ Found ${data.leads.length} leads</span>
+            </div>
+            <div class="leads-list">
+              ${data.leads.map((l, i) => `
+                <div class="lead-card" onclick='selectLead(${JSON.stringify(l).replace(/'/g, "&#39;")})'>
+                  <div class="lead-name">${l.name || 'Unknown'}</div>
+                  <div class="lead-meta">
+                    ${l.address || ''} ${l.rating ? '• ⭐ ' + l.rating : ''} ${l.reviews ? '(' + l.reviews + ' reviews)' : ''}
+                  </div>
+                  <div class="lead-meta">${l.category || l.phone || ''}</div>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        } else {
+          el.innerHTML = `<div class="result-header"><span class="badge badge-yellow">No leads found</span></div><p style="color:var(--muted)">${data.message || 'Try different search terms'}</p>`;
+        }
+      } catch (e) {
+        showError('scrape-result', e.message);
+      }
+      setLoading(btn, false);
+    }
+    
+    function selectLead(lead) {
+      document.getElementById('filter-input').value = JSON.stringify(lead, null, 2);
+      document.getElementById('enrich-input').value = JSON.stringify(lead, null, 2);
+      switchTabByName('filter');
+    }
+    
+    function switchTabByName(tab) {
+      document.querySelectorAll('.tab').forEach((t, i) => {
+        t.classList.toggle('active', ['scrape', 'filter', 'enrich'][i] === tab);
+      });
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      document.getElementById(`panel-${tab}`).classList.add('active');
+    }
+    
+    // FILTER
+    async function doFilter() {
+      const btn = document.getElementById('btn-filter');
+      const input = document.getElementById('filter-input').value.trim();
+      
+      let lead;
+      try { lead = JSON.parse(input); } 
+      catch { return showError('filter-result', 'Invalid JSON'); }
+      
+      setLoading(btn, true);
+      try {
+        const resp = await fetch(`${API}/api/filter`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(lead)
+        });
+        const data = await resp.json();
+        
+        if (data.error) throw new Error(data.error);
+        
+        const el = document.getElementById('filter-result');
+        el.classList.add('show');
+        
+        const score = data.score || 0;
+        const scoreClass = score >= 7 ? 'high' : score >= 4 ? 'med' : 'low';
+        const badgeClass = data.qualified ? 'badge-green' : 'badge-red';
+        
+        el.innerHTML = `
+          <div class="result-header">
+            <span class="badge ${badgeClass}">${data.qualified ? '✓ Qualified' : '✗ Not Qualified'}</span>
+            <span class="badge badge-purple">${data.industry || 'Unknown Industry'}</span>
+          </div>
+          <div class="score-bar">
+            <div class="score-track">
+              <div class="score-fill ${scoreClass}" style="width: ${score * 10}%"></div>
+            </div>
+            <div class="score-value">${score}/10</div>
+          </div>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <div class="detail-label">Reason</div>
+              <div class="detail-value">${data.reason || 'N/A'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Potential Need</div>
+              <div class="detail-value">${data.potentialNeed || 'N/A'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Lead Name</div>
+              <div class="detail-value">${data.lead?.name || 'N/A'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Category</div>
+              <div class="detail-value">${data.lead?.category || 'N/A'}</div>
+            </div>
+          </div>
+          <button class="btn btn-primary" style="margin-top:1rem" onclick='enrichThis()'>Enrich This Lead →</button>
+        `;
+      } catch (e) {
+        showError('filter-result', e.message);
+      }
+      setLoading(btn, false);
+    }
+    
+    function enrichThis() {
+      const input = document.getElementById('filter-input').value;
+      document.getElementById('enrich-input').value = input;
+      switchTabByName('enrich');
+    }
+    
+    // ENRICH
+    async function doEnrich() {
+      const btn = document.getElementById('btn-enrich');
+      const input = document.getElementById('enrich-input').value.trim();
+      
+      let lead;
+      try { lead = JSON.parse(input); } 
+      catch { return showError('enrich-result', 'Invalid JSON'); }
+      
+      setLoading(btn, true);
+      try {
+        const resp = await fetch(`${API}/api/enrich`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(lead)
+        });
+        const data = await resp.json();
+        
+        if (data.error) throw new Error(data.error);
+        
+        const el = document.getElementById('enrich-result');
+        el.classList.add('show');
+        
+        const e = data.enrichment || {};
+        
+        el.innerHTML = `
+          <div class="result-header">
+            <span class="badge badge-purple">📡 Enrichment Results</span>
+          </div>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <div class="detail-label">Lead Name</div>
+              <div class="detail-value">${data.lead?.name || 'N/A'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Website</div>
+              <div class="detail-value">${e.website ? `<a href="${e.website}" target="_blank" style="color:var(--accent)">${e.website}</a>` : 'Not found'}</div>
+            </div>
+          </div>
+          <div class="detail-item" style="margin-top:1rem">
+            <div class="detail-label">Emails Found</div>
+            <div class="email-list">
+              ${e.emails?.length ? e.emails.map(em => `<div class="email-item">✉️ ${em}</div>`).join('') : '<div style="color:var(--muted);font-size:0.9rem">No emails found</div>'}
+            </div>
+          </div>
+          <div class="detail-item" style="margin-top:1rem">
+            <div class="detail-label">Social Profiles</div>
+            <div class="social-links">
+              ${e.social?.twitter ? `<a class="social-link" href="https://twitter.com/${e.social.twitter}" target="_blank">🐦 @${e.social.twitter}</a>` : ''}
+              ${e.social?.linkedin ? `<a class="social-link" href="https://linkedin.com/in/${e.social.linkedin}" target="_blank">💼 ${e.social.linkedin}</a>` : ''}
+              ${e.social?.instagram ? `<a class="social-link" href="https://instagram.com/${e.social.instagram}" target="_blank">📸 ${e.social.instagram}</a>` : ''}
+              ${e.social?.facebook ? `<a class="social-link" href="https://facebook.com/${e.social.facebook}" target="_blank">📘 ${e.social.facebook}</a>` : ''}
+              ${!e.social?.twitter && !e.social?.linkedin && !e.social?.instagram && !e.social?.facebook ? '<div style="color:var(--muted);font-size:0.9rem">No social profiles found</div>' : ''}
+            </div>
+          </div>
+        `;
+      } catch (e) {
+        showError('enrich-result', e.message);
+      }
+      setLoading(btn, false);
+    }
+  </script>
+</body>
+</html>

@@ -2,9 +2,15 @@ import express from "express";
 import axios from "axios";
 import * as cheerio from "cheerio";
 import Groq from "groq-sdk";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app = express();
 app.use(express.json());
+app.use(express.static(join(__dirname, "public")));
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const groq = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
@@ -12,6 +18,10 @@ const GOOGLE_MAPS_URL = "https://www.google.com/maps/search/";
 const DDG_URL = "https://html.duckduckgo.com/html/";
 
 app.get("/", (req, res) => {
+  res.sendFile(join(__dirname, "public", "index.html"));
+});
+
+app.get("/api", (req, res) => {
   res.json({
     name: "Leads Scraper API",
     version: "1.0.0",
