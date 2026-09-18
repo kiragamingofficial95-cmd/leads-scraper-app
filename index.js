@@ -235,53 +235,31 @@ async function analyzeWebsiteSEO(url) {
 async function groqScoreSEO(lead, seoData) {
   if (!groq || !seoData) return null;
 
+  const prompt = `Rate this website SEO 1-10 and overall 1-10. Business: ${lead.name}. Title: "${seoData.title || 'none'}". Meta desc: "${(seoData.metaDescription || 'none').substring(0,100)}". H1: ${seoData.h1Count}. Images: ${seoData.imagesTotal} (${seoData.imagesWithoutAlt} no alt). Mobile: ${seoData.hasViewport}. Schema: ${seoData.hasSchemaMarkup}. Return JSON only: {"seoScore":N,"overallScore":N,"seoIssues":["i1","i2"],"improvements":["f1","f2"],"summary":"text"}`;
+
   try {
-    const prompt = `Rate this business website's SEO and overall quality on a scale of 1-10.
-
-Business: ${lead.name}
-Industry: ${lead.category || lead.industry || "Unknown"}
-Website: ${lead.website}
-
-SEO Data:
-- Title: "${seoData.title || 'MISSING'}"
-- Meta description: "${seoData.metaDescription || 'MISSING'}"
-- H1 tags: ${seoData.h1Count}
-- Images: ${seoData.imagesTotal} total, ${seoData.imagesWithoutAlt} missing alt
-- Links: ${seoData.totalLinks}
-- Mobile viewport: ${seoData.hasViewport}
-- Schema markup: ${seoData.hasSchemaMarkup}
-- Size: ${seoData.htmlSize}
-
-Return ONLY this JSON:
-{"seoScore":1-10,"overallScore":1-10,"seoIssues":["issue1","issue2"],"improvements":["fix1","fix2"],"summary":"2 sentence summary"}`;
-
-    const completion = await Promise.race([
+    const res = await Promise.race([
       groq.chat.completions.create({
         messages: [{ role: "user", content: prompt }],
         model: "openai/gpt-oss-20b",
-        temperature: 0.3,
-        max_tokens: 500
+        temperature: 0.2,
+        max_tokens: 300
       }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 15000))
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000))
     ]);
 
-    const content = completion.choices[0].message.content;
-    if (!content) return null;
-
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return null;
-
-    const parsed = JSON.parse(jsonMatch[0]);
+    const txt = res.choices[0]?.message?.content || "";
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    const p = JSON.parse(m[0]);
     return {
-      seoScore: Math.min(10, Math.max(1, parseInt(parsed.seoScore) || 5)),
-      overallScore: Math.min(10, Math.max(1, parseInt(parsed.overallScore) || 5)),
-      seoIssues: Array.isArray(parsed.seoIssues) ? parsed.seoIssues.slice(0, 5) : [],
-      improvements: Array.isArray(parsed.improvements) ? parsed.improvements.slice(0, 5) : [],
-      summary: String(parsed.summary || "").substring(0, 200)
+      seoScore: Math.min(10, Math.max(1, parseInt(p.seoScore) || 5)),
+      overallScore: Math.min(10, Math.max(1, parseInt(p.overallScore) || 5)),
+      seoIssues: Array.isArray(p.seoIssues) ? p.seoIssues.slice(0, 4) : [],
+      improvements: Array.isArray(p.improvements) ? p.improvements.slice(0, 4) : [],
+      summary: String(p.summary || "").substring(0, 150)
     };
-  } catch (e) {
-    return null;
-  }
+  } catch { return null; }
 }
 
 function extractSocials(html) {
