@@ -16,6 +16,7 @@ app.use(express.static(join(__dirname, "public")));
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const groq = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
+console.log("Groq initialized:", !!groq, "Key present:", !!GROQ_API_KEY);
 const GOOGLE_MAPS_URL = "https://www.google.com/maps/search/";
 const DDG_URL = "https://html.duckduckgo.com/html/";
 
@@ -364,17 +365,23 @@ app.post("/api/enrich", async (req, res) => {
         // SEO analysis
         try {
           enrichment.seoData = await analyzeWebsiteSEO(enrichment.website);
-        } catch (e) { enrichment.seoData = null; }
+          console.log("SEO data:", !!enrichment.seoData);
+        } catch (e) { enrichment.seoData = null; console.log("SEO analysis error:", e.message); }
 
         // SEO scoring via Groq
+        console.log("Checking SEO scoring:", !!enrichment.seoData, !!groq);
         if (enrichment.seoData && groq) {
           try {
+            console.log("Calling groqScoreSEO...");
             const seoResult = await groqScoreSEO({ ...lead, website: enrichment.website }, enrichment.seoData);
+            console.log("SEO result:", !!seoResult);
             enrichment.seoScores = seoResult;
           } catch (e) {
+            console.log("SEO scoring error:", e.message);
             enrichment.seoScores = { error: e.message };
           }
         } else {
+          console.log("Skipping SEO scoring - seoData:", !!enrichment.seoData, "groq:", !!groq);
           enrichment.seoScores = { error: "no seoData or groq" };
         }
 
