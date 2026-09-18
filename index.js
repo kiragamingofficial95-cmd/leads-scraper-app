@@ -3,6 +3,7 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import Groq from "groq-sdk";
 import puppeteer from "puppeteer";
+import chromium from "@sparticuz/chromium";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
@@ -41,14 +42,10 @@ app.post("/api/scrape", async (req, res) => {
   let browser;
   try {
     browser = await puppeteer.launch({
-      headless: "new",
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--single-process"
-      ]
+      headless: chromium.headless,
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
     });
 
     const page = await browser.newPage();
