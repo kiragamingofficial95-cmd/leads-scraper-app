@@ -166,15 +166,27 @@ Return ONLY valid JSON:
     });
 
     const content = completion.choices[0].message.content;
+    if (!content) {
+      return res.status(200).json({ lead, qualified: false, score: 0, reason: "Empty AI response", industry: "", potentialNeed: "", pitchAngle: "" });
+    }
+
     let decision;
     try {
       const jsonMatch = content.match(/\{[\s\S]*\}/);
-      decision = jsonMatch ? JSON.parse(jsonMatch[0]) : { qualified: false, reason: "Could not parse" };
+      decision = jsonMatch ? JSON.parse(jsonMatch[0]) : { qualified: false, score: 0, reason: "Could not parse response" };
     } catch {
-      decision = { qualified: false, score: 0, reason: "Invalid response" };
+      decision = { qualified: false, score: 0, reason: "Invalid JSON from AI" };
     }
 
-    return res.status(200).json({ lead, ...decision });
+    return res.status(200).json({
+      lead,
+      qualified: Boolean(decision.qualified),
+      score: Math.min(10, Math.max(0, parseInt(decision.score) || 0)),
+      reason: String(decision.reason || "").substring(0, 200),
+      industry: String(decision.industry || ""),
+      potentialNeed: String(decision.potentialNeed || ""),
+      pitchAngle: String(decision.pitchAngle || "")
+    });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -224,42 +236,47 @@ async function groqScoreSEO(lead, seoData) {
   if (!groq || !seoData) return null;
 
   try {
-    const prompt = `You are an SEO expert. Rate this business website's SEO and overall quality.
+    const prompt = `Rate this business website's SEO and overall quality on a scale of 1-10.
 
 Business: ${lead.name}
 Industry: ${lead.category || lead.industry || "Unknown"}
 Website: ${lead.website}
 
-SEO Data Found:
-- Title tag: "${seoData.title || 'MISSING'}"
+SEO Data:
+- Title: "${seoData.title || 'MISSING'}"
 - Meta description: "${seoData.metaDescription || 'MISSING'}"
 - H1 tags: ${seoData.h1Count}
-- Images total: ${seoData.imagesTotal}, without alt: ${seoData.imagesWithoutAlt}
-- Total links: ${seoData.totalLinks}
-- Has mobile viewport: ${seoData.hasViewport}
-- Has schema markup: ${seoData.hasSchemaMarkup}
-- HTML size: ${seoData.htmlSize}
+- Images: ${seoData.imagesTotal} total, ${seoData.imagesWithoutAlt} missing alt
+- Links: ${seoData.totalLinks}
+- Mobile viewport: ${seoData.hasViewport}
+- Schema markup: ${seoData.hasSchemaMarkup}
+- Size: ${seoData.htmlSize}
 
-Return ONLY valid JSON:
-{
-  "seoScore": 1-10,
-  "overallScore": 1-10,
-  "seoIssues": ["issue1", "issue2", "issue3"],
-  "improvements": ["improvement1", "improvement2"],
-  "summary": "2 sentence summary of their web presence"
-}`;
+Return ONLY this JSON:
+{"seoScore":1-10,"overallScore":1-10,"seoIssues":["issue1","issue2"],"improvements":["fix1","fix2"],"summary":"2 sentence summary"}`;
 
     const completion = await groq.chat.completions.create({
       messages: [{ role: "user", content: prompt }],
       model: "openai/gpt-oss-20b",
       temperature: 0.3,
-      max_tokens: 600
+      max_tokens: 500
     });
 
     const content = completion.choices[0].message.content;
+    if (!content) return null;
+
     const jsonMatch = content.match(/\{[\s\S]*\}/);
-    return jsonMatch ? JSON.parse(jsonMatch[0]) : null;
-  } catch {
+    if (!jsonMatch) return null;
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    return {
+      seoScore: Math.min(10, Math.max(1, parseInt(parsed.seoScore) || 5)),
+      overallScore: Math.min(10, Math.max(1, parseInt(parsed.overallScore) || 5)),
+      seoIssues: Array.isArray(parsed.seoIssues) ? parsed.seoIssues.slice(0, 5) : [],
+      improvements: Array.isArray(parsed.improvements) ? parsed.improvements.slice(0, 5) : [],
+      summary: String(parsed.summary || "").substring(0, 200)
+    };
+  } catch (e) {
     return null;
   }
 }
@@ -408,12 +425,26 @@ app.post("/api/enrich", async (req, res) => {
       } catch { continue; }
     }
 
-    enrichment.emails = [...new Set(enrichment.emails)].filter(e => !e.includes("sentry.io") && !e.includes("wixpress") && !e.includes("example.com")).slice(0, 8);
+    enrichment.emails = [...new Set(enrichment.emails)].filter(e => !e.includes("sentry.io") && !e.includes("wixpress") && !e.includes("example.com") && !e.includes("sentry-next.wixpress.com")).slice(0, 8);
     enrichment.sourceUrl = lead.url || "";
 
-    return res.status(200).json({ lead, enrichment });
+    return res.status(200).json({
+      lead,
+      enrichment: {
+        emails: enrichment.emails,
+        social: enrichment.social,
+        website: enrichment.website,
+        seoData: enrichment.seoData,
+        seoScores: enrichment.seoScores,
+        sourceUrl: enrichment.sourceUrl
+      }
+    });
   } catch (error) {
-    return res.status(500).json({ error: error.message, enrichment });
+    return res.status(200).json({
+      lead,
+      enrichment: { emails: [], social: {}, website: lead.website || "", seoData: null, seoScores: null, sourceUrl: "" },
+      error: error.message
+    });
   }
 });
 
