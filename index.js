@@ -2,6 +2,7 @@ import express from "express";
 import axios from "axios";
 import * as cheerio from "cheerio";
 import Groq from "groq-sdk";
+import puppeteer from "puppeteer";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
@@ -37,13 +38,88 @@ app.post("/api/scrape", async (req, res) => {
   const { query, location } = req.body;
   if (!query || !location) return res.status(400).json({ error: "query and location required" });
 
+  let browser;
   try {
-    const search = encodeURIComponent(`${query} in ${location}`);
-    const resp = await axios.get(`https://www.google.com/maps/search/${search}`, {
-      headers: { "User-Agent": "Mozilla/5.0" }
+    browser = await puppeteer.launch({
+      headless: "new",
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--single-process"
+      ]
     });
-    return res.status(200).json({ message: "Use /api/scrape endpoint with proper browser support", query, location });
+
+    const page = await browser.newPage();
+    await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+    await page.setViewport({ width: 1280, height: 720 });
+
+    const search = encodeURIComponent(`${query} in ${location}`);
+    await page.goto(`${GOOGLE_MAPS_URL}${search}`, { waitUntil: "networkidle2", timeout: 45000 });
+
+    await new Promise(r => setTimeout(r, 4000));
+
+    for (let i = 0; i < 6; i++) {
+      await page.evaluate(() => {
+        const feed = document.querySelector('[role="feed"]');
+        if (feed) feed.scrollTop = feed.scrollHeight;
+        window.scrollBy(0, window.innerHeight);
+      });
+      await new Promise(r => setTimeout(r, 1500));
+    }
+
+    const leads = await page.evaluate(() => {
+      const results = [];
+      const feed = document.querySelector('[role="feed"]');
+      if (!feed) return results;
+
+      const items = feed.querySelectorAll(':scope > div > div');
+      items.forEach(item => {
+        const nameEl = item.querySelector('.qBF1Pd, .fontHeadlineSmall, [class*="fontHeadlineSmall"]');
+        if (!nameEl) return;
+
+        const name = nameEl.innerText.trim();
+        if (!name) return;
+
+        const allText = item.innerText || "";
+        const lines = allText.split('\n').map(l => l.trim()).filter(Boolean);
+
+        let rating = "", reviews = "", category = "", address = "", phone = "", url = "";
+
+        const ratingMatch = allText.match(/(\d+\.?\d*)\s*stars?/i) || allText.match(/(\d+\.?\d*)\s*\(/);
+        if (ratingMatch) rating = ratingMatch[1];
+
+        const reviewsMatch = allText.match(/\((\d[\d,]*)\)/);
+        if (reviewsMatch) reviews = reviewsMatch[1].replace(/,/g, "");
+
+        const linkEl = item.querySelector('a[href*="maps"]');
+        if (linkEl) url = linkEl.href;
+
+        const phoneMatch = allText.match(/(\+?\d[\d\s\-()]{7,})/);
+        if (phoneMatch) phone = phoneMatch[1].trim();
+
+        for (const line of lines) {
+          if (!address && (line.includes("St") || line.includes("Rd") || line.includes("Ave") || line.includes("Dr") || line.includes("Blvd") || line.includes("Way") || line.includes("Ln") || /\d+.*(?:street|road|avenue|drive|boulevard|lane)/i.test(line))) {
+            address = line;
+          }
+        }
+
+        if (address && lines.indexOf(address) > 0) {
+          const catLine = lines[lines.indexOf(address) - 1];
+          if (catLine && catLine !== name && !catLine.match(/^\d/)) category = catLine;
+        }
+
+        results.push({ name, rating, reviews, category, address, phone, url });
+      });
+
+      return results;
+    });
+
+    await browser.close();
+    return res.status(200).json({ leads, query, location });
   } catch (error) {
+    if (browser) await browser.close().catch(() => {});
     return res.status(500).json({ error: error.message });
   }
 });
