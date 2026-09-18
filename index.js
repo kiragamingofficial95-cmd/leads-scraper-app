@@ -235,31 +235,26 @@ async function analyzeWebsiteSEO(url) {
 async function groqScoreSEO(lead, seoData) {
   if (!groq || !seoData) return null;
 
-  const prompt = `Rate this website SEO 1-10 and overall 1-10. Business: ${lead.name}. Title: "${seoData.title || 'none'}". Meta desc: "${(seoData.metaDescription || 'none').substring(0,100)}". H1: ${seoData.h1Count}. Images: ${seoData.imagesTotal} (${seoData.imagesWithoutAlt} no alt). Mobile: ${seoData.hasViewport}. Schema: ${seoData.hasSchemaMarkup}. Return JSON only: {"seoScore":N,"overallScore":N,"seoIssues":["i1","i2"],"improvements":["f1","f2"],"summary":"text"}`;
+  const prompt = `Rate this website SEO 1-10 and overall 1-10. Business: ${lead.name}. Title: "${seoData.title || 'none'}". Meta: "${(seoData.metaDescription || 'none').substring(0,80)}". H1: ${seoData.h1Count}. Images: ${seoData.imagesTotal}(${seoData.imagesWithoutAlt} no alt). Mobile: ${seoData.hasViewport}. Schema: ${seoData.hasSchemaMarkup}. Return JSON: {"seoScore":N,"overallScore":N,"seoIssues":["i1"],"improvements":["f1"],"summary":"text"}`;
 
-  try {
-    const res = await Promise.race([
-      groq.chat.completions.create({
-        messages: [{ role: "user", content: prompt }],
-        model: "openai/gpt-oss-20b",
-        temperature: 0.2,
-        max_tokens: 300
-      }),
-      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000))
-    ]);
+  const res = await groq.chat.completions.create({
+    messages: [{ role: "user", content: prompt }],
+    model: "openai/gpt-oss-20b",
+    temperature: 0.2,
+    max_tokens: 250
+  });
 
-    const txt = res.choices[0]?.message?.content || "";
-    const m = txt.match(/\{[\s\S]*\}/);
-    if (!m) return null;
-    const p = JSON.parse(m[0]);
-    return {
-      seoScore: Math.min(10, Math.max(1, parseInt(p.seoScore) || 5)),
-      overallScore: Math.min(10, Math.max(1, parseInt(p.overallScore) || 5)),
-      seoIssues: Array.isArray(p.seoIssues) ? p.seoIssues.slice(0, 4) : [],
-      improvements: Array.isArray(p.improvements) ? p.improvements.slice(0, 4) : [],
-      summary: String(p.summary || "").substring(0, 150)
-    };
-  } catch { return null; }
+  const txt = res.choices[0]?.message?.content || "";
+  const m = txt.match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  const p = JSON.parse(m[0]);
+  return {
+    seoScore: Math.min(10, Math.max(1, parseInt(p.seoScore) || 5)),
+    overallScore: Math.min(10, Math.max(1, parseInt(p.overallScore) || 5)),
+    seoIssues: Array.isArray(p.seoIssues) ? p.seoIssues.slice(0, 4) : [],
+    improvements: Array.isArray(p.improvements) ? p.improvements.slice(0, 4) : [],
+    summary: String(p.summary || "").substring(0, 150)
+  };
 }
 
 function extractSocials(html) {
@@ -369,14 +364,17 @@ app.post("/api/enrich", async (req, res) => {
         // SEO analysis
         try {
           enrichment.seoData = await analyzeWebsiteSEO(enrichment.website);
-        } catch { enrichment.seoData = null; }
+        } catch (e) { enrichment.seoData = null; }
 
         // SEO scoring via Groq
-        try {
-          if (enrichment.seoData && groq) {
-            enrichment.seoScores = await groqScoreSEO({ ...lead, website: enrichment.website }, enrichment.seoData);
+        if (enrichment.seoData && groq) {
+          try {
+            const seoResult = await groqScoreSEO({ ...lead, website: enrichment.website }, enrichment.seoData);
+            enrichment.seoScores = seoResult;
+          } catch (e) {
+            enrichment.seoScores = null;
           }
-        } catch { enrichment.seoScores = null; }
+        }
 
       } catch { /* website not reachable */ }
     }
