@@ -5,167 +5,91 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LeadScraper AI</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    :root {
-      --bg: #0a0a0f;
-      --card: #12121a;
-      --border: #1e1e2e;
-      --accent: #6366f1;
-      --accent2: #8b5cf6;
-      --green: #22c55e;
-      --red: #ef4444;
-      --yellow: #eab308;
-      --text: #e4e4e7;
-      --muted: #71717a;
-    }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-    }
-    .gradient-bg {
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      background: radial-gradient(ellipse at 20% 0%, rgba(99,102,241,0.15) 0%, transparent 50%),
-                  radial-gradient(ellipse at 80% 100%, rgba(139,92,246,0.1) 0%, transparent 50%);
-      pointer-events: none; z-index: 0;
-    }
-    .container { position: relative; z-index: 1; max-width: 900px; margin: 0 auto; padding: 2rem; }
-    header { text-align: center; margin-bottom: 2rem; }
-    header h1 {
-      font-size: 2.5rem; font-weight: 700;
-      background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      margin-bottom: 0.5rem;
-    }
-    header p { color: var(--muted); font-size: 1.05rem; }
+    *{margin:0;padding:0;box-sizing:border-box}
+    :root{--bg:#0a0a0f;--card:#12121a;--border:#1e1e2e;--accent:#6366f1;--accent2:#8b5cf6;--green:#22c55e;--red:#ef4444;--yellow:#eab308;--text:#e4e4e7;--muted:#71717a}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+    .gradient-bg{position:fixed;top:0;left:0;right:0;bottom:0;background:radial-gradient(ellipse at 20% 0%,rgba(99,102,241,.15) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,.1) 0%,transparent 50%);pointer-events:none;z-index:0}
+    .container{position:relative;z-index:1;max-width:900px;margin:0 auto;padding:2rem}
+    header{text-align:center;margin-bottom:2rem}
+    header h1{font-size:2.5rem;font-weight:700;background:linear-gradient(135deg,#6366f1,#a855f7,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:.5rem}
+    header p{color:var(--muted);font-size:1.05rem}
 
-    .search-box {
-      background: var(--card); border: 1px solid var(--border); border-radius: 16px;
-      padding: 2rem; margin-bottom: 2rem;
-    }
-    .form-row { display: flex; gap: 1rem; margin-bottom: 1rem; }
-    .form-group { flex: 1; display: flex; flex-direction: column; gap: 0.4rem; }
-    label { font-size: 0.8rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
-    input {
-      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
-      padding: 0.75rem 1rem; color: var(--text); font-size: 0.95rem; transition: border-color 0.2s;
-    }
-    input:focus { outline: none; border-color: var(--accent); }
+    .search-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:2rem;margin-bottom:2rem}
+    .form-row{display:flex;gap:1rem;margin-bottom:1rem}
+    .form-group{flex:1;display:flex;flex-direction:column;gap:.4rem}
+    label{font-size:.8rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    input{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.75rem 1rem;color:var(--text);font-size:.95rem;transition:border-color .2s}
+    input:focus{outline:none;border-color:var(--accent)}
+    .btn{width:100%;padding:.9rem;border:none;border-radius:10px;font-size:1rem;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:.6rem}
+    .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+    .btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 24px rgba(99,102,241,.4)}
+    .btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
 
-    .btn {
-      width: 100%; padding: 0.9rem; border: none; border-radius: 10px;
-      font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.2s;
-      display: flex; align-items: center; justify-content: center; gap: 0.6rem;
-    }
-    .btn-primary {
-      background: linear-gradient(135deg, var(--accent), var(--accent2)); color: white;
-    }
-    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 24px rgba(99,102,241,0.4); }
-    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+    .spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
 
-    .spinner { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.6s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .pipeline-status{display:flex;align-items:center;justify-content:center;gap:.5rem;margin-top:1.25rem;flex-wrap:wrap}
+    .step{display:flex;align-items:center;gap:.4rem;padding:.4rem .9rem;border-radius:20px;font-size:.8rem;font-weight:500;background:rgba(255,255,255,.03);border:1px solid var(--border);color:var(--muted);transition:all .3s}
+    .step.active{border-color:var(--accent);color:var(--accent);background:rgba(99,102,241,.1)}
+    .step.done{border-color:var(--green);color:var(--green);background:rgba(34,197,94,.1)}
+    .step.fail{border-color:var(--red);color:var(--red);background:rgba(239,68,68,.1)}
+    .arrow{color:var(--muted);font-size:.9rem}
 
-    .pipeline-status {
-      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
-      margin-top: 1.25rem; flex-wrap: wrap;
-    }
-    .step {
-      display: flex; align-items: center; gap: 0.4rem;
-      padding: 0.4rem 0.9rem; border-radius: 20px; font-size: 0.8rem; font-weight: 500;
-      background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: var(--muted);
-      transition: all 0.3s;
-    }
-    .step.active { border-color: var(--accent); color: var(--accent); background: rgba(99,102,241,0.1); }
-    .step.done { border-color: var(--green); color: var(--green); background: rgba(34,197,94,0.1); }
-    .step.fail { border-color: var(--red); color: var(--red); background: rgba(239,68,68,0.1); }
-    .arrow { color: var(--muted); font-size: 0.9rem; }
+    .stats-bar{display:flex;gap:1rem;margin-top:1.5rem;flex-wrap:wrap}
+    .stat{flex:1;min-width:100px;padding:1rem;background:var(--bg);border:1px solid var(--border);border-radius:10px;text-align:center}
+    .stat-num{font-size:1.8rem;font-weight:700}
+    .stat-num.green{color:var(--green)}.stat-num.yellow{color:var(--yellow)}.stat-num.purple{color:#a855f7}.stat-num.blue{color:#3b82f6}
+    .stat-label{font-size:.7rem;color:var(--muted);text-transform:uppercase;margin-top:.25rem}
 
-    .stats-bar {
-      display: flex; gap: 1rem; margin-top: 1.5rem; flex-wrap: wrap;
-    }
-    .stat {
-      flex: 1; min-width: 120px; padding: 1rem; background: var(--bg);
-      border: 1px solid var(--border); border-radius: 10px; text-align: center;
-    }
-    .stat-num { font-size: 1.8rem; font-weight: 700; }
-    .stat-num.green { color: var(--green); }
-    .stat-num.yellow { color: var(--yellow); }
-    .stat-num.purple { color: #a855f7; }
-    .stat-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; margin-top: 0.25rem; }
+    .export-bar{display:flex;gap:.75rem;margin-top:1.5rem}
+    .btn-export{flex:1;padding:.7rem;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:.85rem;font-weight:500;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:.5rem}
+    .btn-export:hover{border-color:var(--accent);background:rgba(99,102,241,.08)}
 
-    .export-bar {
-      display: flex; gap: 0.75rem; margin-top: 1.5rem;
-    }
-    .btn-export {
-      flex: 1; padding: 0.75rem; border: 1px solid var(--border); border-radius: 10px;
-      background: var(--card); color: var(--text); font-size: 0.9rem; font-weight: 500;
-      cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem;
-    }
-    .btn-export:hover { border-color: var(--accent); background: rgba(99,102,241,0.08); }
+    .results{margin-top:1.5rem;display:flex;flex-direction:column;gap:1rem}
+    .lead-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.25rem;transition:all .2s}
+    .lead-card:hover{border-color:var(--accent)}
+    .lead-top{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:.75rem}
+    .lead-name{font-size:1.05rem;font-weight:600;flex:1}
+    .scores{display:flex;gap:.5rem;flex-shrink:0}
+    .score-badge{display:flex;align-items:center;gap:.3rem;padding:.25rem .6rem;border-radius:20px;font-size:.8rem;font-weight:600;white-space:nowrap}
+    .score-badge.high{background:rgba(34,197,94,.15);color:var(--green)}
+    .score-badge.med{background:rgba(234,179,8,.15);color:var(--yellow)}
+    .score-badge.low{background:rgba(239,68,68,.15);color:var(--red)}
+    .score-badge.blue{background:rgba(59,130,246,.15);color:#3b82f6}
 
-    .results { margin-top: 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
+    .lead-meta{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.5rem}
+    .meta-tag{font-size:.8rem;color:var(--muted);padding:.2rem .6rem;background:rgba(255,255,255,.03);border-radius:4px}
 
-    .lead-card {
-      background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-      padding: 1.25rem; transition: all 0.2s; cursor: default;
-    }
-    .lead-card:hover { border-color: var(--accent); }
-    .lead-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 0.75rem; }
-    .lead-name { font-size: 1.05rem; font-weight: 600; }
-    .lead-score {
-      display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.75rem;
-      border-radius: 20px; font-size: 0.85rem; font-weight: 600; white-space: nowrap;
-    }
-    .lead-score.high { background: rgba(34,197,94,0.15); color: var(--green); }
-    .lead-score.med { background: rgba(234,179,8,0.15); color: var(--yellow); }
-    .lead-score.low { background: rgba(239,68,68,0.15); color: var(--red); }
+    .lead-detail{margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border)}
+    .detail-row{display:flex;gap:.5rem;margin-bottom:.4rem;font-size:.85rem}
+    .detail-label{color:var(--muted);min-width:80px;flex-shrink:0}
+    .detail-val{color:var(--text);word-break:break-word}
+    .detail-val a{color:var(--accent);text-decoration:none}
+    .detail-val a:hover{text-decoration:underline}
 
-    .lead-meta { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem; }
-    .meta-tag {
-      font-size: 0.8rem; color: var(--muted); padding: 0.2rem 0.6rem;
-      background: rgba(255,255,255,0.03); border-radius: 4px;
-    }
+    .pitch-box{margin-top:.75rem;padding:.75rem 1rem;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.2);border-radius:8px;font-size:.85rem}
+    .pitch-label{font-size:.7rem;color:#a855f7;text-transform:uppercase;font-weight:600;margin-bottom:.3rem}
 
-    .lead-detail { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
-    .detail-row { display: flex; gap: 0.5rem; margin-bottom: 0.4rem; font-size: 0.85rem; }
-    .detail-label { color: var(--muted); min-width: 90px; }
-    .detail-val { color: var(--text); word-break: break-word; }
-    .detail-val a { color: var(--accent); text-decoration: none; }
-    .detail-val a:hover { text-decoration: underline; }
+    .seo-box{margin-top:.75rem;padding:.75rem 1rem;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:8px}
+    .seo-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem;flex-wrap:wrap}
+    .seo-score-pill{display:flex;align-items:center;gap:.3rem;padding:.2rem .6rem;border-radius:12px;font-size:.8rem;font-weight:600}
+    .seo-score-pill.good{background:rgba(34,197,94,.15);color:var(--green)}
+    .seo-score-pill.ok{background:rgba(234,179,8,.15);color:var(--yellow)}
+    .seo-score-pill.bad{background:rgba(239,68,68,.15);color:var(--red)}
+    .seo-issues{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.5rem}
+    .seo-issue{font-size:.75rem;padding:.15rem .5rem;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.15);border-radius:4px;color:var(--red)}
+    .seo-fix{font-size:.75rem;padding:.15rem .5rem;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.15);border-radius:4px;color:var(--green)}
 
-    .social-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
-    .social-pill {
-      display: inline-flex; align-items: center; gap: 0.3rem;
-      padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.8rem;
-      background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.2);
-      color: var(--accent); text-decoration: none;
-    }
-    .social-pill:hover { background: rgba(99,102,241,0.2); }
+    .social-row{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem}
+    .social-pill{display:inline-flex;align-items:center;gap:.3rem;padding:.25rem .6rem;border-radius:6px;font-size:.8rem;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);color:var(--accent);text-decoration:none}
+    .social-pill:hover{background:rgba(99,102,241,.2)}
+    .email-pill{display:inline-flex;align-items:center;gap:.3rem;padding:.25rem .6rem;border-radius:6px;font-size:.8rem;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);color:var(--green);font-family:monospace}
 
-    .email-pill {
-      display: inline-flex; align-items: center; gap: 0.3rem;
-      padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.8rem;
-      background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.2);
-      color: var(--green); font-family: monospace;
-    }
+    .error-box{padding:1rem;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:8px;color:var(--red);margin-top:1rem}
+    .empty{text-align:center;padding:3rem;color:var(--muted)}
+    .empty-icon{font-size:3rem;margin-bottom:1rem}
 
-    .error-box {
-      padding: 1rem; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2);
-      border-radius: 8px; color: var(--red); margin-top: 1rem;
-    }
-
-    .empty { text-align: center; padding: 3rem; color: var(--muted); }
-    .empty-icon { font-size: 3rem; margin-bottom: 1rem; }
-
-    @media (max-width: 640px) {
-      .container { padding: 1rem; }
-      header h1 { font-size: 1.75rem; }
-      .form-row { flex-direction: column; }
-      .stats-bar { flex-direction: column; }
-      .export-bar { flex-direction: column; }
-    }
+    @media(max-width:640px){.container{padding:1rem}header h1{font-size:1.75rem}.form-row{flex-direction:column}.stats-bar{flex-direction:column}.export-bar{flex-direction:column}.scores{flex-direction:column;align-items:flex-end}}
   </style>
 </head>
 <body>
@@ -173,251 +97,170 @@
   <div class="container">
     <header>
       <h1>LeadScraper AI</h1>
-      <p>Scrape → Qualify → Enrich — all in one click</p>
+      <p>Scrape → Qualify for Web Dev → Enrich → SEO Score — all in one click</p>
     </header>
 
     <div class="search-box">
       <div class="form-row">
-        <div class="form-group">
-          <label>Search Query</label>
-          <input type="text" id="query" placeholder="e.g. interior designer, dentist, restaurant">
-        </div>
-        <div class="form-group">
-          <label>Location</label>
-          <input type="text" id="location" placeholder="e.g. Noida, New York, London">
-        </div>
+        <div class="form-group"><label>Search Query</label><input type="text" id="query" placeholder="e.g. interior designer, dentist, restaurant"></div>
+        <div class="form-group"><label>Location</label><input type="text" id="location" placeholder="e.g. Noida, New York, London"></div>
       </div>
-      <button class="btn btn-primary" id="btn-run" onclick="runPipeline()">
-        <span id="btn-text">🔍 Scrape, Qualify & Enrich</span>
-      </button>
+      <button class="btn btn-primary" id="btn-run" onclick="runPipeline()"><span id="btn-text">🔍 Run Full Pipeline</span></button>
       <div class="pipeline-status" id="status-bar">
-        <div class="step" id="step-scrape">🔍 Scrape</div>
-        <span class="arrow">→</span>
-        <div class="step" id="step-qualify">🧠 Qualify</div>
-        <span class="arrow">→</span>
-        <div class="step" id="step-enrich">📡 Enrich</div>
+        <div class="step" id="step-scrape">🔍 Scrape</div><span class="arrow">→</span>
+        <div class="step" id="step-qualify">🧠 Qualify</div><span class="arrow">→</span>
+        <div class="step" id="step-enrich">📡 Enrich + SEO</div>
       </div>
     </div>
 
     <div id="stats" class="stats-bar" style="display:none"></div>
     <div id="export" class="export-bar" style="display:none">
-      <button class="btn-export" onclick="exportJSON()">📄 Export All (JSON)</button>
-      <button class="btn-export" onclick="exportCSV()">📊 Export All (CSV)</button>
-      <button class="btn-export" onclick="exportQualifiedJSON()">📄 Export Qualified Only (JSON)</button>
+      <button class="btn-export" onclick="exportJSON()">📄 All JSON</button>
+      <button class="btn-export" onclick="exportCSV()">📊 All CSV</button>
+      <button class="btn-export" onclick="exportQualifiedJSON()">📄 Qualified JSON</button>
+      <button class="btn-export" onclick="exportQualifiedCSV()">📊 Qualified CSV</button>
     </div>
     <div id="results" class="results"></div>
   </div>
 
   <script>
-    const API = '';
-    let allData = [];
+    const API='';
+    let allData=[];
 
-    function setStep(id, state) {
-      const el = document.getElementById(id);
-      el.className = 'step ' + state;
-    }
+    function setStep(id,state){document.getElementById(id).className='step '+state}
+    function setLoading(on){const b=document.getElementById('btn-run'),t=document.getElementById('btn-text');b.disabled=on;t.innerHTML=on?'<span class="spinner"></span> Running pipeline...':'🔍 Run Full Pipeline'}
 
-    function setLoading(on) {
-      const btn = document.getElementById('btn-run');
-      const text = document.getElementById('btn-text');
-      btn.disabled = on;
-      text.innerHTML = on ? '<span class="spinner"></span> Running pipeline...' : '🔍 Scrape, Qualify & Enrich';
-    }
+    function dl(name,content,type){const b=new Blob([content],{type}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u)}
+    function exportJSON(){if(!allData.length)return;dl('leads-'+Date.now()+'.json',JSON.stringify(allData,null,2),'application/json')}
+    function exportQualifiedJSON(){const q=allData.filter(d=>d.qualified);if(!q.length)return;dl('leads-qualified-'+Date.now()+'.json',JSON.stringify(q,null,2),'application/json')}
 
-    function downloadFile(name, content, type) {
-      const blob = new Blob([content], { type });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = name;
-      document.body.appendChild(a); a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
+    function csvEscape(v){return'"'+String(v||'').replace(/"/g,'""')+'"'}
 
-    function exportJSON() {
-      if (!allData.length) return;
-      downloadFile(`leads-${Date.now()}.json`, JSON.stringify(allData, null, 2), 'application/json');
-    }
-
-    function exportQualifiedJSON() {
-      const q = allData.filter(d => d.qualified);
-      if (!q.length) return;
-      downloadFile(`leads-qualified-${Date.now()}.json`, JSON.stringify(q, null, 2), 'application/json');
-    }
-
-    function exportCSV() {
-      if (!allData.length) return;
-      const headers = ['Name','Rating','Reviews','Address','Phone','URL','Qualified','Score','Reason','Industry','Potential Need','Emails','Twitter','LinkedIn','Instagram','Facebook','Website'];
-      const rows = allData.map(d => {
-        const l = d.lead || {};
-        const e = d.enrichment || {};
-        return [
-          `"${(l.name||'').replace(/"/g,'""')}"`,
-          `"${l.rating||''}"`,
-          `"${l.reviews||''}"`,
-          `"${(l.address||'').replace(/"/g,'""')}"`,
-          `"${l.phone||''}"`,
-          `"${l.url||''}"`,
-          `"${d.qualified?'Yes':'No'}"`,
-          `"${d.score||''}"`,
-          `"${(d.reason||'').replace(/"/g,'""')}"`,
-          `"${d.industry||''}"`,
-          `"${(d.potentialNeed||'').replace(/"/g,'""')}"`,
-          `"${(e.emails||[]).join('; ')}"`,
-          `"${e.social?.twitter||''}"`,
-          `"${e.social?.linkedin||''}"`,
-          `"${e.social?.instagram||''}"`,
-          `"${e.social?.facebook||''}"`,
-          `"${e.website||''}"`,
-        ];
+    function buildCSV(data){
+      const h=['Name','Rating','Reviews','Address','Phone','URL','Website','Qualified','Score','Reason','Industry','Potential Need','Pitch Angle','SEO Score','Overall Score','Emails','Twitter','LinkedIn','Instagram','Facebook','YouTube'];
+      const rows=data.map(d=>{
+        const l=d.lead||{},e=d.enrichment||{},s=e.seoScores||{};
+        return[csvEscape(l.name),csvEscape(l.rating),csvEscape(l.reviews),csvEscape(l.address),csvEscape(l.phone),csvEscape(l.url),csvEscape(l.website),csvEscape(d.qualified?'Yes':'No'),csvEscape(d.score),csvEscape(d.reason),csvEscape(d.industry),csvEscape(d.potentialNeed),csvEscape(d.pitchAngle),csvEscape(s.seoScore),csvEscape(s.overallScore),csvEscape((e.emails||[]).join('; ')),csvEscape(e.social?.twitter),csvEscape(e.social?.linkedin),csvEscape(e.social?.instagram),csvEscape(e.social?.facebook),csvEscape(e.social?.youtube)].join(',')
       });
-      const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-      downloadFile(`leads-${Date.now()}.csv`, csv, 'text/csv');
+      return[h.join(','),...rows].join('\n')
     }
 
-    async function runPipeline() {
-      const query = document.getElementById('query').value.trim();
-      const location = document.getElementById('location').value.trim();
-      if (!query || !location) return alert('Enter both query and location');
+    function exportCSV(){if(!allData.length)return;dl('leads-'+Date.now()+'.csv',buildCSV(allData),'text/csv')}
+    function exportQualifiedCSV(){const q=allData.filter(d=>d.qualified);if(!q.length)return;dl('leads-qualified-'+Date.now()+'.csv',buildCSV(q),'text/csv')}
 
-      setLoading(true);
-      allData = [];
-      document.getElementById('results').innerHTML = '';
-      document.getElementById('stats').style.display = 'none';
-      document.getElementById('export').style.display = 'none';
-      setStep('step-scrape', 'active');
-      setStep('step-qualify', '');
-      setStep('step-enrich', '');
+    async function runPipeline(){
+      const query=document.getElementById('query').value.trim(),location=document.getElementById('location').value.trim();
+      if(!query||!location)return alert('Enter both query and location');
+      setLoading(true);allData=[];document.getElementById('results').innerHTML='';document.getElementById('stats').style.display='none';document.getElementById('export').style.display='none';
+      setStep('step-scrape','active');setStep('step-qualify','');setStep('step-enrich','');
 
-      try {
-        // STEP 1: Scrape
-        const scrapeResp = await fetch(`${API}/api/scrape`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query, location })
-        });
-        const scrapeData = await scrapeResp.json();
-        if (scrapeData.error) throw new Error(scrapeData.error);
+      try{
+        const sr=await fetch(`${API}/api/scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query,location})});
+        const sd=await sr.json();if(sd.error)throw new Error(sd.error);
+        const leads=sd.leads||[];
+        if(!leads.length){setStep('step-scrape','fail');document.getElementById('results').innerHTML='<div class="empty"><div class="empty-icon">🔍</div>No leads found. Try different search terms.</div>';setLoading(false);return}
+        setStep('step-scrape','done');
 
-        const leads = scrapeData.leads || [];
-        if (!leads.length) {
-          setStep('step-scrape', 'fail');
-          document.getElementById('results').innerHTML = '<div class="empty"><div class="empty-icon">🔍</div>No leads found. Try different search terms.</div>';
-          setLoading(false);
-          return;
+        setStep('step-qualify','active');
+        const qualified=[];
+        for(let i=0;i<leads.length;i++){
+          try{
+            const fr=await fetch(`${API}/api/filter`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(leads[i])});
+            const fd=await fr.json();
+            if(!fd.error&&fd.qualified)qualified.push(fd);
+            document.getElementById('results').innerHTML=`<div class="empty"><div class="spinner"></div><div style="margin-top:1rem">Qualifying leads... ${i+1}/${leads.length}</div></div>`;
+          }catch{continue}
         }
-        setStep('step-scrape', 'done');
+        setStep('step-qualify','done');
 
-        // STEP 2: Qualify each lead
-        setStep('step-qualify', 'active');
-        const qualified = [];
-
-        for (let i = 0; i < leads.length; i++) {
-          try {
-            const fResp = await fetch(`${API}/api/filter`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(leads[i])
-            });
-            const fData = await fResp.json();
-            if (!fData.error && fData.qualified) {
-              qualified.push(fData);
-            }
-            // render progress
-            document.getElementById('results').innerHTML = `
-              <div class="empty"><div class="spinner"></div>
-              <div style="margin-top:1rem">Qualifying leads... ${i + 1}/${leads.length}</div></div>`;
-          } catch { continue; }
+        setStep('step-enrich','active');
+        for(let i=0;i<qualified.length;i++){
+          try{
+            const er=await fetch(`${API}/api/enrich`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(qualified[i].lead)});
+            const ed=await er.json();
+            qualified[i].enrichment=ed.enrichment||{};
+            qualified[i].lead={...qualified[i].lead,...(ed.lead||{})};
+            document.getElementById('results').innerHTML=`<div class="empty"><div class="spinner"></div><div style="margin-top:1rem">Enriching + SEO scoring... ${i+1}/${qualified.length}</div></div>`;
+          }catch{qualified[i].enrichment={emails:[],social:{},website:'',seoData:null,seoScores:null}}
         }
-        setStep('step-qualify', 'done');
+        setStep('step-enrich','done');
 
-        // STEP 3: Enrich qualified leads
-        setStep('step-enrich', 'active');
-        for (let i = 0; i < qualified.length; i++) {
-          try {
-            const eResp = await fetch(`${API}/api/enrich`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(qualified[i].lead)
-            });
-            const eData = await eResp.json();
-            qualified[i].enrichment = eData.enrichment || {};
-            // render progress
-            document.getElementById('results').innerHTML = `
-              <div class="empty"><div class="spinner"></div>
-              <div style="margin-top:1rem">Enriching qualified leads... ${i + 1}/${qualified.length}</div></div>`;
-          } catch {
-            qualified[i].enrichment = { emails: [], social: {}, website: '' };
-          }
-        }
-        setStep('step-enrich', 'done');
-
-        allData = qualified;
-        renderResults(qualified, leads.length);
-
-      } catch (e) {
-        document.getElementById('results').innerHTML = `<div class="error-box">⚠️ ${e.message}</div>`;
-        setStep('step-scrape', 'fail');
+        allData=qualified;renderResults(qualified,leads.length);
+      }catch(e){
+        document.getElementById('results').innerHTML=`<div class="error-box">⚠️ ${e.message}</div>`;
+        setStep('step-scrape','fail');
       }
       setLoading(false);
     }
 
-    function renderResults(data, totalScraped) {
-      const qCount = data.length;
-      const withEmails = data.filter(d => d.enrichment?.emails?.length).length;
-      const withSocial = data.filter(d => {
-        const s = d.enrichment?.social || {};
-        return s.twitter || s.linkedin || s.instagram || s.facebook;
-      }).length;
+    function scoreClass(s){return s>=7?'high':s>=4?'med':'low'}
+    function seoClass(s){return s>=7?'good':s>=4?'ok':'bad'}
 
-      document.getElementById('stats').style.display = 'flex';
-      document.getElementById('stats').innerHTML = `
+    function renderResults(data,totalScraped){
+      const qCount=data.length;
+      const wEmails=data.filter(d=>d.enrichment?.emails?.length).length;
+      const wSocial=data.filter(d=>{const s=d.enrichment?.social||{};return s.twitter||s.linkedin||s.instagram||s.facebook}).length;
+      const wSEO=data.filter(d=>d.enrichment?.seoScores?.seoScore).length;
+
+      document.getElementById('stats').style.display='flex';
+      document.getElementById('stats').innerHTML=`
         <div class="stat"><div class="stat-num purple">${totalScraped}</div><div class="stat-label">Scraped</div></div>
         <div class="stat"><div class="stat-num green">${qCount}</div><div class="stat-label">Qualified</div></div>
-        <div class="stat"><div class="stat-num yellow">${withEmails}</div><div class="stat-label">With Emails</div></div>
-        <div class="stat"><div class="stat-num purple">${withSocial}</div><div class="stat-label">With Social</div></div>
+        <div class="stat"><div class="stat-num yellow">${wEmails}</div><div class="stat-label">With Emails</div></div>
+        <div class="stat"><div class="stat-num blue">${wSEO}</div><div class="stat-label">SEO Scored</div></div>
       `;
+      document.getElementById('export').style.display='flex';
 
-      document.getElementById('export').style.display = 'flex';
+      if(!data.length){document.getElementById('results').innerHTML='<div class="empty"><div class="empty-icon">🤔</div>No leads qualified. Try a different query.</div>';return}
 
-      if (!data.length) {
-        document.getElementById('results').innerHTML = '<div class="empty"><div class="empty-icon">🤔</div>No leads qualified. Try a different query.</div>';
-        return;
-      }
-
-      document.getElementById('results').innerHTML = data.map(d => {
-        const l = d.lead || {};
-        const e = d.enrichment || {};
-        const scoreClass = (d.score||0) >= 7 ? 'high' : (d.score||0) >= 4 ? 'med' : 'low';
-
-        return `
+      document.getElementById('results').innerHTML=data.map(d=>{
+        const l=d.lead||{},e=d.enrichment||{},s=e.seoScores||{},seo=e.seoData||{};
+        return`
         <div class="lead-card">
           <div class="lead-top">
-            <div class="lead-name">${l.name || 'Unknown'}</div>
-            <div class="lead-score ${scoreClass}">⭐ ${d.score || 0}/10</div>
+            <div class="lead-name">${l.name||'Unknown'}</div>
+            <div class="scores">
+              ${s.seoScore?`<div class="score-badge ${seoClass(s.seoScore)}">🔍 SEO ${s.seoScore}/10</div>`:''}
+              <div class="score-badge ${scoreClass(d.score)}">⭐ ${d.score||0}/10</div>
+            </div>
           </div>
           <div class="lead-meta">
-            ${l.rating ? `<span class="meta-tag">⭐ ${l.rating} (${l.reviews || 0})</span>` : ''}
-            ${l.phone ? `<span class="meta-tag">📞 ${l.phone}</span>` : ''}
-            ${d.industry ? `<span class="meta-tag">🏢 ${d.industry}</span>` : ''}
+            ${l.rating?`<span class="meta-tag">⭐ ${l.rating} (${l.reviews||0})</span>`:''}
+            ${l.phone?`<span class="meta-tag">📞 ${l.phone}</span>`:''}
+            ${d.industry?`<span class="meta-tag">🏢 ${d.industry}</span>`:''}
           </div>
-          ${l.address ? `<div class="detail-row"><span class="detail-label">Address</span><span class="detail-val">${l.address}</span></div>` : ''}
-          <div class="detail-row"><span class="detail-label">Reason</span><span class="detail-val">${d.reason || 'N/A'}</span></div>
-          <div class="detail-row"><span class="detail-label">Need</span><span class="detail-val">${d.potentialNeed || 'N/A'}</span></div>
-          ${l.url ? `<div class="detail-row"><span class="detail-label">Maps</span><span class="detail-val"><a href="${l.url}" target="_blank">Open in Google Maps →</a></span></div>` : ''}
+          ${l.address?`<div class="detail-row"><span class="detail-label">Address</span><span class="detail-val">${l.address}</span></div>`:''}
+          <div class="detail-row"><span class="detail-label">Reason</span><span class="detail-val">${d.reason||'N/A'}</div>
+          <div class="detail-row"><span class="detail-label">Need</span><span class="detail-val">${d.potentialNeed||'N/A'}</div>
+          ${d.pitchAngle?`<div class="pitch-box"><div class="pitch-label">💡 Pitch Angle</div>${d.pitchAngle}</div>`:''}
+          ${l.url?`<div class="detail-row" style="margin-top:.5rem"><span class="detail-label">Maps</span><span class="detail-val"><a href="${l.url}" target="_blank">Open in Google Maps →</a></span></div>`:''}
+          ${l.website?`<div class="detail-row"><span class="detail-label">Website</span><span class="detail-val"><a href="${l.website}" target="_blank">${l.website}</a></span></div>`:''}
           <div class="lead-detail">
-            ${e.emails?.length ? `<div style="margin-bottom:0.5rem">${e.emails.map(em => `<span class="email-pill">✉️ ${em}</span> `).join('')}</div>` : ''}
-            ${(e.social?.twitter || e.social?.linkedin || e.social?.instagram || e.social?.facebook) ? `
+            ${s.seoScore?`
+            <div class="seo-box">
+              <div class="seo-header">
+                <span class="seo-score-pill ${seoClass(s.seoScore)}">🔍 SEO: ${s.seoScore}/10</span>
+                <span class="seo-score-pill ${seoClass(s.overallScore)}">📊 Overall: ${s.overallScore}/10</span>
+                ${seo.h1Count!==undefined?`<span class="meta-tag">H1: ${seo.h1Count}</span>`:''}
+                ${seo.imagesTotal!==undefined?`<span class="meta-tag">Images: ${seo.imagesTotal}</span>`:''}
+                ${seo.hasViewport!==undefined?`<span class="meta-tag">${seo.hasViewport?'✅ Mobile':'❌ No Mobile'}</span>`:''}
+                ${seo.hasSchemaMarkup!==undefined?`<span class="meta-tag">${seo.hasSchema?'✅ Schema':'❌ No Schema'}</span>`:''}
+              </div>
+              ${s.summary?`<div style="font-size:.8rem;color:var(--muted);margin-bottom:.5rem">${s.summary}</div>`:''}
+              ${s.seoIssues?.length?`<div class="seo-issues">${s.seoIssues.map(i=>`<span class="seo-issue">⚠ ${i}</span>`).join('')}</div>`:''}
+              ${s.improvements?.length?`<div class="seo-issues" style="margin-top:.3rem">${s.improvements.map(i=>`<span class="seo-fix">✓ ${i}</span>`).join('')}</div>`:''}
+            </div>`:''}
+            ${e.emails?.length?`<div style="margin-top:.75rem">${e.emails.map(em=>`<span class="email-pill">✉️ ${em}</span> `).join('')}</div>`:''}
+            ${(e.social?.twitter||e.social?.linkedin||e.social?.instagram||e.social?.facebook||e.social?.youtube)?`
               <div class="social-row">
-                ${e.social.twitter ? `<a class="social-pill" href="https://twitter.com/${e.social.twitter}" target="_blank">🐦 @${e.social.twitter}</a>` : ''}
-                ${e.social.linkedin ? `<a class="social-pill" href="https://linkedin.com/in/${e.social.linkedin}" target="_blank">💼 ${e.social.linkedin}</a>` : ''}
-                ${e.social.instagram ? `<a class="social-pill" href="https://instagram.com/${e.social.instagram}" target="_blank">📸 ${e.social.instagram}</a>` : ''}
-                ${e.social.facebook ? `<a class="social-pill" href="https://facebook.com/${e.social.facebook}" target="_blank">📘 ${e.social.facebook}</a>` : ''}
-              </div>` : ''}
-            ${e.website ? `<div class="detail-row" style="margin-top:0.5rem"><span class="detail-label">Website</span><span class="detail-val"><a href="${e.website}" target="_blank">${e.website}</a></span></div>` : ''}
+                ${e.social.twitter?`<a class="social-pill" href="https://twitter.com/${e.social.twitter}" target="_blank">🐦 @${e.social.twitter}</a>`:''}
+                ${e.social.linkedin?`<a class="social-pill" href="https://linkedin.com/in/${e.social.linkedin}" target="_blank">💼 ${e.social.linkedin}</a>`:''}
+                ${e.social.instagram?`<a class="social-pill" href="https://instagram.com/${e.social.instagram}" target="_blank">📸 ${e.social.instagram}</a>`:''}
+                ${e.social.facebook?`<a class="social-pill" href="https://facebook.com/${e.social.facebook}" target="_blank">📘 ${e.social.facebook}</a>`:''}
+                ${e.social.youtube?`<a class="social-pill" href="https://youtube.com/@${e.social.youtube}" target="_blank">🎬 ${e.social.youtube}</a>`:''}
+              </div>`:''}
           </div>
-        </div>`;
-      }).join('');
+        </div>`}).join('');
     }
   </script>
 </body>

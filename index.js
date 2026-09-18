@@ -54,7 +54,6 @@ app.post("/api/scrape", async (req, res) => {
 
     const search = encodeURIComponent(`${query} in ${location}`);
     await page.goto(`${GOOGLE_MAPS_URL}${search}`, { waitUntil: "networkidle2", timeout: 45000 });
-
     await new Promise(r => setTimeout(r, 4000));
 
     for (let i = 0; i < 6; i++) {
@@ -75,14 +74,12 @@ app.post("/api/scrape", async (req, res) => {
       items.forEach(item => {
         const nameEl = item.querySelector('.qBF1Pd, .fontHeadlineSmall, [class*="fontHeadlineSmall"]');
         if (!nameEl) return;
-
         const name = nameEl.innerText.trim();
         if (!name) return;
 
         const allText = item.innerText || "";
         const lines = allText.split('\n').map(l => l.trim()).filter(Boolean);
-
-        let rating = "", reviews = "", category = "", address = "", phone = "", url = "";
+        let rating = "", reviews = "", category = "", address = "", phone = "", url = "", website = "";
 
         const ratingMatch = allText.match(/(\d+\.?\d*)\s*stars?/i) || allText.match(/(\d+\.?\d*)\s*\(/);
         if (ratingMatch) rating = ratingMatch[1];
@@ -96,6 +93,11 @@ app.post("/api/scrape", async (req, res) => {
         const phoneMatch = allText.match(/(\+?\d[\d\s\-()]{7,})/);
         if (phoneMatch) phone = phoneMatch[1].trim();
 
+        const webMatch = allText.match(/(?:https?:\/\/)?(?:www\.)?([a-zA-Z0-9-]+\.[a-z]{2,})/);
+        if (webMatch && !webMatch[0].includes("google") && !webMatch[0].includes("gstatic")) {
+          website = webMatch[0].startsWith("http") ? webMatch[0] : "https://" + webMatch[0];
+        }
+
         for (const line of lines) {
           if (!address && (line.includes("St") || line.includes("Rd") || line.includes("Ave") || line.includes("Dr") || line.includes("Blvd") || line.includes("Way") || line.includes("Ln") || /\d+.*(?:street|road|avenue|drive|boulevard|lane)/i.test(line))) {
             address = line;
@@ -107,7 +109,7 @@ app.post("/api/scrape", async (req, res) => {
           if (catLine && catLine !== name && !catLine.match(/^\d/)) category = catLine;
         }
 
-        results.push({ name, rating, reviews, category, address, phone, url });
+        results.push({ name, rating, reviews, category, address, phone, url, website });
       });
 
       return results;
@@ -127,14 +129,24 @@ app.post("/api/filter", async (req, res) => {
   if (!groq) return res.status(500).json({ error: "GROQ_API_KEY not configured" });
 
   try {
-    const prompt = `Analyze this B2B lead for software development services qualification:
+    const prompt = `You are a B2B sales qualification expert. A web development agency wants to pitch their services (website design, web apps, ecommerce, SEO) to local businesses.
 
-Name: ${lead.name || "N/A"}
-Address: ${lead.address || "N/A"}
-Phone: ${lead.phone || "N/A"}
-Rating: ${lead.rating || "N/A"}
-Reviews: ${lead.reviews || "N/A"}
-Category: ${lead.category || "N/A"}
+Analyze this lead and determine if they are a GOOD PROSPECT to pitch web development services to.
+
+Lead Info:
+- Business Name: ${lead.name || "N/A"}
+- Category/Industry: ${lead.category || "N/A"}
+- Address: ${lead.address || "N/A"}
+- Phone: ${lead.phone || "N/A"}
+- Rating: ${lead.rating || "N/A"}
+- Reviews: ${lead.reviews || "N/A"}
+- Website: ${lead.website || "None found"}
+
+Qualification Criteria:
+- Does this business likely need a website or web app?
+- Are they established enough to afford web dev services?
+- Is their industry a good fit for web development?
+- If they have no website or a poor one, they are HIGH priority.
 
 Return ONLY valid JSON:
 {
@@ -142,14 +154,15 @@ Return ONLY valid JSON:
   "score": 1-10,
   "reason": "Brief explanation max 30 words",
   "industry": "Detected industry",
-  "potentialNeed": "What software service they might need"
+  "potentialNeed": "Specific web dev service they need",
+  "pitchAngle": "How to approach them for web dev pitch"
 }`;
 
     const completion = await groq.chat.completions.create({
       messages: [{ role: "user", content: prompt }],
       model: "openai/gpt-oss-20b",
       temperature: 0.3,
-      max_tokens: 500
+      max_tokens: 600
     });
 
     const content = completion.choices[0].message.content;
@@ -167,51 +180,235 @@ Return ONLY valid JSON:
   }
 });
 
+async function analyzeWebsiteSEO(url) {
+  if (!url) return null;
+
+  try {
+    const resp = await axios.get(url, {
+      timeout: 10000,
+      maxRedirects: 5,
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
+    });
+    const html = typeof resp.data === "string" ? resp.data : "";
+    const $ = cheerio.load(html);
+
+    const title = $("title").text().trim();
+    const metaDesc = $('meta[name="description"]').attr("content") || "";
+    const h1Count = $("h1").length;
+    const imgNoAlt = $("img:not([alt])").length;
+    const imgTotal = $("img").length;
+    const links = $("a[href]").length;
+    const hasViewport = !!$('meta[name="viewport"]').length;
+    const hasSchema = html.includes("application/ld+json");
+    const hasSitemap = html.includes("sitemap");
+    const loadTime = resp.headers["x-response-time"] || "unknown";
+
+    return {
+      title,
+      metaDescription: metaDesc.substring(0, 160),
+      h1Count,
+      imagesTotal: imgTotal,
+      imagesWithoutAlt: imgNoAlt,
+      totalLinks: links,
+      hasViewport,
+      hasSchemaMarkup: hasSchema,
+      hasSitemapReference: hasSitemap,
+      htmlSize: Math.round(html.length / 1024) + "KB"
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function groqScoreSEO(lead, seoData) {
+  if (!groq || !seoData) return null;
+
+  try {
+    const prompt = `You are an SEO expert. Rate this business website's SEO and overall quality.
+
+Business: ${lead.name}
+Industry: ${lead.category || lead.industry || "Unknown"}
+Website: ${lead.website}
+
+SEO Data Found:
+- Title tag: "${seoData.title || 'MISSING'}"
+- Meta description: "${seoData.metaDescription || 'MISSING'}"
+- H1 tags: ${seoData.h1Count}
+- Images total: ${seoData.imagesTotal}, without alt: ${seoData.imagesWithoutAlt}
+- Total links: ${seoData.totalLinks}
+- Has mobile viewport: ${seoData.hasViewport}
+- Has schema markup: ${seoData.hasSchemaMarkup}
+- HTML size: ${seoData.htmlSize}
+
+Return ONLY valid JSON:
+{
+  "seoScore": 1-10,
+  "overallScore": 1-10,
+  "seoIssues": ["issue1", "issue2", "issue3"],
+  "improvements": ["improvement1", "improvement2"],
+  "summary": "2 sentence summary of their web presence"
+}`;
+
+    const completion = await groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: "openai/gpt-oss-20b",
+      temperature: 0.3,
+      max_tokens: 600
+    });
+
+    const content = completion.choices[0].message.content;
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    return jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function extractSocials(html) {
+  const socials = {};
+
+  const twitter = html.match(/twitter\.com\/([a-zA-Z0-9_]+)/i) || html.match(/x\.com\/([a-zA-Z0-9_]+)/i);
+  if (twitter) socials.twitter = twitter[1];
+
+  const linkedin = html.match(/linkedin\.com\/(in|company)\/([a-zA-Z0-9_-]+)/i);
+  if (linkedin) socials.linkedin = linkedin[2];
+
+  const instagram = html.match(/instagram\.com\/([a-zA-Z0-9_.]+)/i);
+  if (instagram) socials.instagram = instagram[1];
+
+  const facebook = html.match(/facebook\.com\/([a-zA-Z0-9.]+)/i);
+  if (facebook) socials.facebook = facebook[1];
+
+  const youtube = html.match(/youtube\.com\/(channel|c|@)\/([a-zA-Z0-9_-]+)/i);
+  if (youtube) socials.youtube = youtube[2];
+
+  return socials;
+}
+
 app.post("/api/enrich", async (req, res) => {
   const lead = req.body;
   if (!lead || !lead.name) return res.status(400).json({ error: "Lead with name required" });
 
-  const enrichment = { emails: [], social: {}, website: "" };
+  const enrichment = { emails: [], social: {}, website: lead.website || "", seoData: null, seoScores: null };
 
   try {
-    const searchQuery = `"${lead.name}" ${lead.address || ""} email contact`;
-    const searchResp = await axios.get(`${DDG_URL}?q=${encodeURIComponent(searchQuery)}&kl=us-en`, { timeout: 15000 });
-    const $ = cheerio.load(searchResp.data);
+    // Step 1: Find website from DuckDuckGo if not available
+    if (!enrichment.website) {
+      const searchQuery = `"${lead.name}" ${lead.address || ""} official website`;
+      const searchResp = await axios.get(`${DDG_URL}?q=${encodeURIComponent(searchQuery)}&kl=us-en`, { timeout: 15000 });
+      const $ = cheerio.load(searchResp.data);
 
-    const links = [];
-    $(".result__url").each((_, el) => {
-      const href = $(el).attr("href");
-      if (href && !href.includes("duckduckgo")) links.push(href);
+      const links = [];
+      $(".result__url").each((_, el) => {
+        const href = $(el).attr("href");
+        if (href && !href.includes("duckduckgo") && !href.includes("google") && !href.includes("facebook.com/pages")) {
+          links.push(href);
+        }
+      });
+
+      if (links.length) enrichment.website = links[0];
+    }
+
+    // Step 2: Scrape the lead's own website for socials + emails
+    if (enrichment.website) {
+      try {
+        const siteResp = await axios.get(enrichment.website, {
+          timeout: 10000,
+          maxRedirects: 5,
+          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
+        });
+        const html = typeof siteResp.data === "string" ? siteResp.data : "";
+        const $ = cheerio.load(html);
+
+        // Extract emails from website
+        const bodyText = $.text();
+        const emails = bodyText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
+        enrichment.emails.push(...emails);
+
+        // Also check mailto: links
+        $('a[href^="mailto:"]').each((_, el) => {
+          const email = $(el).attr("href").replace("mailto:", "").split("?")[0];
+          if (email) enrichment.emails.push(email);
+        });
+
+        // Extract socials from website HTML
+        const socials = extractSocials(html);
+        Object.assign(enrichment.social, socials);
+
+        // Also check href attributes for social links
+        $('a[href*="twitter.com"], a[href*="x.com"]').each((_, el) => {
+          const href = $(el).attr("href");
+          const m = href.match(/(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]+)/);
+          if (m && !enrichment.social.twitter) enrichment.social.twitter = m[1];
+        });
+        $('a[href*="linkedin.com"]').each((_, el) => {
+          const href = $(el).attr("href");
+          const m = href.match(/linkedin\.com\/(in|company)\/([a-zA-Z0-9_-]+)/);
+          if (m && !enrichment.social.linkedin) enrichment.social.linkedin = m[2];
+        });
+        $('a[href*="instagram.com"]').each((_, el) => {
+          const href = $(el).attr("href");
+          const m = href.match(/instagram\.com\/([a-zA-Z0-9_.]+)/);
+          if (m && !enrichment.social.instagram) enrichment.social.instagram = m[1];
+        });
+        $('a[href*="facebook.com"]').each((_, el) => {
+          const href = $(el).attr("href");
+          const m = href.match(/facebook\.com\/([a-zA-Z0-9.]+)/);
+          if (m && !enrichment.social.facebook) enrichment.social.facebook = m[1];
+        });
+        $('a[href*="youtube.com"]').each((_, el) => {
+          const href = $(el).attr("href");
+          const m = href.match(/youtube\.com\/(channel|c|@)\/([a-zA-Z0-9_-]+)/);
+          if (m && !enrichment.social.youtube) enrichment.social.youtube = m[2];
+        });
+
+        // Get phone from website if not found
+        if (!lead.phone) {
+          const phoneMatch = html.match(/(\+?\d[\d\s\-()]{7,})/);
+          if (phoneMatch) lead.phone = phoneMatch[1].trim();
+        }
+
+        // SEO analysis
+        enrichment.seoData = await analyzeWebsiteSEO(enrichment.website);
+
+        // SEO scoring via Groq
+        if (enrichment.seoData) {
+          enrichment.seoScores = await groqScoreSEO({ ...lead, website: enrichment.website }, enrichment.seoData);
+        }
+
+      } catch { /* website not reachable */ }
+    }
+
+    // Step 3: DuckDuckGo fallback for more emails/socials
+    const ddgQuery = `"${lead.name}" ${lead.address || ""} email contact`;
+    const ddgResp = await axios.get(`${DDG_URL}?q=${encodeURIComponent(ddgQuery)}&kl=us-en`, { timeout: 12000 });
+    const $$ = cheerio.load(ddgResp.data);
+
+    const ddgLinks = [];
+    $$(".result__url").each((_, el) => {
+      const href = $$(el).attr("href");
+      if (href && !href.includes("duckduckgo")) ddgLinks.push(href);
     });
 
-    for (const url of [...new Set(links)].slice(0, 5)) {
+    for (const url of [...new Set(ddgLinks)].slice(0, 3)) {
+      if (url === enrichment.website) continue;
       try {
-        const pageResp = await axios.get(url, { timeout: 8000, maxRedirects: 5, headers: { "User-Agent": "Mozilla/5.0" } });
+        const pageResp = await axios.get(url, { timeout: 6000, maxRedirects: 3, headers: { "User-Agent": "Mozilla/5.0" } });
         const text = typeof pageResp.data === "string" ? pageResp.data : "";
 
         const emails = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
         enrichment.emails.push(...emails);
 
-        const twitter = text.match(/twitter\.com\/([a-zA-Z0-9_]+)/i);
-        if (twitter) enrichment.social.twitter = twitter[1];
-
-        const linkedin = text.match(/linkedin\.com\/(in|company)\/([a-zA-Z0-9-]+)/i);
-        if (linkedin) enrichment.social.linkedin = linkedin[2];
-
-        const instagram = text.match(/instagram\.com\/([a-zA-Z0-9_.]+)/i);
-        if (instagram) enrichment.social.instagram = instagram[1];
-
-        const facebook = text.match(/facebook\.com\/([a-zA-Z0-9.]+)/i);
-        if (facebook) enrichment.social.facebook = facebook[1];
-
-        if (!enrichment.website) {
-          const web = text.match(/https?:\/\/(www\.)?[a-zA-Z0-9-]+\.[a-z]{2,}/);
-          if (web) enrichment.website = web[0];
-        }
+        const socials = extractSocials(text);
+        if (socials.twitter && !enrichment.social.twitter) enrichment.social.twitter = socials.twitter;
+        if (socials.linkedin && !enrichment.social.linkedin) enrichment.social.linkedin = socials.linkedin;
+        if (socials.instagram && !enrichment.social.instagram) enrichment.social.instagram = socials.instagram;
+        if (socials.facebook && !enrichment.social.facebook) enrichment.social.facebook = socials.facebook;
+        if (socials.youtube && !enrichment.social.youtube) enrichment.social.youtube = socials.youtube;
       } catch { continue; }
     }
 
-    enrichment.emails = [...new Set(enrichment.emails)].slice(0, 5);
+    enrichment.emails = [...new Set(enrichment.emails)].filter(e => !e.includes("sentry.io") && !e.includes("wixpress") && !e.includes("example.com")).slice(0, 8);
     enrichment.sourceUrl = lead.url || "";
 
     return res.status(200).json({ lead, enrichment });
