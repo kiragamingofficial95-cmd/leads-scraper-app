@@ -319,6 +319,33 @@
       font-family: monospace;
     }
     
+    .export-bar {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+    
+    .btn-export {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.6rem 1.2rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-export:hover { border-color: var(--accent); background: rgba(99, 102, 241, 0.1); }
+    .btn-export.json:hover { color: var(--green); border-color: var(--green); }
+    .btn-export.csv:hover { color: var(--yellow); border-color: var(--yellow); }
+    
     .leads-list {
       display: flex;
       flex-direction: column;
@@ -453,6 +480,50 @@
 
   <script>
     const API = '';
+    let scrapedLeads = [];
+    
+    function downloadFile(filename, content, type) {
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+    
+    function exportJSON() {
+      if (!scrapedLeads.length) return;
+      const json = JSON.stringify(scrapedLeads, null, 2);
+      const timestamp = new Date().toISOString().slice(0, 10);
+      downloadFile(`leads-${timestamp}.json`, json, 'application/json');
+    }
+    
+    function exportCSV() {
+      if (!scrapedLeads.length) return;
+      const headers = ['Name', 'Rating', 'Reviews', 'Category', 'Address', 'Phone', 'URL'];
+      const rows = scrapedLeads.map(l => [
+        `"${(l.name || '').replace(/"/g, '""')}"`,
+        `"${l.rating || ''}"`,
+        `"${l.reviews || ''}"`,
+        `"${(l.category || '').replace(/"/g, '""')}"`,
+        `"${(l.address || '').replace(/"/g, '""')}"`,
+        `"${l.phone || ''}"`,
+        `"${l.url || ''}"`
+      ]);
+      const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      const timestamp = new Date().toISOString().slice(0, 10);
+      downloadFile(`leads-${timestamp}.csv`, csv, 'text/csv');
+    }
+    
+    function exportEnrichedJSON(data) {
+      const json = JSON.stringify(data, null, 2);
+      const name = (data.lead?.name || 'lead').replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+      const timestamp = new Date().toISOString().slice(0, 10);
+      downloadFile(`${name}-enriched-${timestamp}.json`, json, 'application/json');
+    }
     
     function switchTab(tab) {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -499,6 +570,7 @@
         el.classList.add('show');
         
         if (data.leads && data.leads.length) {
+          scrapedLeads = data.leads;
           el.innerHTML = `
             <div class="result-header">
               <span class="badge badge-green">✓ Found ${data.leads.length} leads</span>
@@ -513,6 +585,10 @@
                   <div class="lead-meta">${l.category || l.phone || ''}</div>
                 </div>
               `).join('')}
+            </div>
+            <div class="export-bar">
+              <button class="btn-export json" onclick="exportJSON()">📄 Export JSON</button>
+              <button class="btn-export csv" onclick="exportCSV()">📊 Export CSV</button>
             </div>
           `;
         } else {
@@ -662,6 +738,9 @@
               ${e.social?.facebook ? `<a class="social-link" href="https://facebook.com/${e.social.facebook}" target="_blank">📘 ${e.social.facebook}</a>` : ''}
               ${!e.social?.twitter && !e.social?.linkedin && !e.social?.instagram && !e.social?.facebook ? '<div style="color:var(--muted);font-size:0.9rem">No social profiles found</div>' : ''}
             </div>
+          </div>
+          <div class="export-bar">
+            <button class="btn-export json" onclick='exportEnrichedJSON(${JSON.stringify(data).replace(/'/g, "&#39;")})'>📄 Export Enriched JSON</button>
           </div>
         `;
       } catch (e) {
