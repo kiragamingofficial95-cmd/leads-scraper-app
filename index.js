@@ -372,8 +372,10 @@ app.post("/api/enrich", async (req, res) => {
             const seoResult = await groqScoreSEO({ ...lead, website: enrichment.website }, enrichment.seoData);
             enrichment.seoScores = seoResult;
           } catch (e) {
-            enrichment.seoScores = null;
+            enrichment.seoScores = { error: e.message };
           }
+        } else {
+          enrichment.seoScores = { error: "no seoData or groq" };
         }
 
       } catch { /* website not reachable */ }
