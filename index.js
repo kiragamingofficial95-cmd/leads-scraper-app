@@ -16,7 +16,6 @@ app.use(express.static(join(__dirname, "public")));
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const groq = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
-console.log("Groq initialized:", !!groq, "Key present:", !!GROQ_API_KEY);
 const GOOGLE_MAPS_URL = "https://www.google.com/maps/search/";
 const DDG_URL = "https://html.duckduckgo.com/html/";
 
@@ -234,28 +233,44 @@ async function analyzeWebsiteSEO(url) {
 }
 
 async function groqScoreSEO(lead, seoData) {
-  if (!groq || !seoData) return null;
+  if (!seoData) return null;
 
-  const prompt = `Rate this website SEO 1-10 and overall 1-10. Business: ${lead.name}. Title: "${seoData.title || 'none'}". Meta: "${(seoData.metaDescription || 'none').substring(0,80)}". H1: ${seoData.h1Count}. Images: ${seoData.imagesTotal}(${seoData.imagesWithoutAlt} no alt). Mobile: ${seoData.hasViewport}. Schema: ${seoData.hasSchemaMarkup}. Return JSON: {"seoScore":N,"overallScore":N,"seoIssues":["i1"],"improvements":["f1"],"summary":"text"}`;
+  let seoScore = 5;
+  let issues = [];
+  let improvements = [];
 
-  const res = await groq.chat.completions.create({
-    messages: [{ role: "user", content: prompt }],
-    model: "openai/gpt-oss-20b",
-    temperature: 0.2,
-    max_tokens: 250
-  });
+  if (!seoData.title || seoData.title.length < 10) { seoScore -= 2; issues.push("Missing or short title tag"); }
+  else if (seoData.title.length > 60) { seoScore -= 1; issues.push("Title tag too long"); }
 
-  const txt = res.choices[0]?.message?.content || "";
-  const m = txt.match(/\{[\s\S]*\}/);
-  if (!m) return null;
-  const p = JSON.parse(m[0]);
-  return {
-    seoScore: Math.min(10, Math.max(1, parseInt(p.seoScore) || 5)),
-    overallScore: Math.min(10, Math.max(1, parseInt(p.overallScore) || 5)),
-    seoIssues: Array.isArray(p.seoIssues) ? p.seoIssues.slice(0, 4) : [],
-    improvements: Array.isArray(p.improvements) ? p.improvements.slice(0, 4) : [],
-    summary: String(p.summary || "").substring(0, 150)
-  };
+  if (!seoData.metaDescription) { seoScore -= 2; issues.push("No meta description"); }
+  else if (seoData.metaDescription.length < 50) { seoScore -= 1; issues.push("Meta description too short"); }
+
+  if (seoData.h1Count === 0) { seoScore -= 2; issues.push("No H1 tag found"); }
+  else if (seoData.h1Count > 1) { seoScore -= 1; issues.push("Multiple H1 tags"); }
+
+  if (seoData.imagesWithoutAlt > 0) { seoScore -= 1; issues.push(`${seoData.imagesWithoutAlt} images missing alt text`); }
+  if (!seoData.hasViewport) { seoScore -= 2; issues.push("No mobile viewport"); improvements.push("Add viewport meta tag"); }
+  if (!seoData.hasSchemaMarkup) { seoScore -= 1; issues.push("No schema markup"); improvements.push("Add structured data"); }
+  if (seoData.htmlSize && parseInt(seoData.htmlSize) > 500) { seoScore -= 1; issues.push("Heavy page size"); }
+
+  if (seoData.title && seoData.title.length >= 10 && seoData.title.length <= 60) improvements.push("Good title length");
+  if (seoData.metaDescription && seoData.metaDescription.length >= 50) improvements.push("Good meta description");
+  if (seoData.h1Count === 1) improvements.push("Proper H1 structure");
+  if (seoData.hasViewport) improvements.push("Mobile-friendly viewport");
+  if (seoData.hasSchemaMarkup) improvements.push("Has structured data");
+  if (seoData.imagesWithoutAlt === 0 && seoData.imagesTotal > 0) improvements.push("All images have alt text");
+
+  seoScore = Math.min(10, Math.max(1, seoScore));
+
+  let overallScore = seoScore;
+  if (lead.rating) overallScore = Math.round((seoScore + parseFloat(lead.rating)) / 2);
+  overallScore = Math.min(10, Math.max(1, overallScore));
+
+  let summary = `${lead.name || 'Business'} has a ${seoScore >= 7 ? 'good' : seoScore >= 4 ? 'moderate' : 'poor'} web presence. `;
+  if (issues.length > 0) summary += `Key issues: ${issues.slice(0, 2).join(', ')}. `;
+  if (!lead.website) summary += "No website found - high priority for web development pitch.";
+
+  return { seoScore, overallScore, seoIssues: issues.slice(0, 4), improvements: improvements.slice(0, 4), summary: summary.substring(0, 200) };
 }
 
 function extractSocials(html) {
@@ -365,24 +380,15 @@ app.post("/api/enrich", async (req, res) => {
         // SEO analysis
         try {
           enrichment.seoData = await analyzeWebsiteSEO(enrichment.website);
-          console.log("SEO data:", !!enrichment.seoData);
-        } catch (e) { enrichment.seoData = null; console.log("SEO analysis error:", e.message); }
+        } catch (e) { enrichment.seoData = null; }
 
-        // SEO scoring via Groq
-        console.log("Checking SEO scoring:", !!enrichment.seoData, !!groq);
-        if (enrichment.seoData && groq) {
+        // SEO scoring
+        if (enrichment.seoData) {
           try {
-            console.log("Calling groqScoreSEO...");
-            const seoResult = await groqScoreSEO({ ...lead, website: enrichment.website }, enrichment.seoData);
-            console.log("SEO result:", !!seoResult);
-            enrichment.seoScores = seoResult;
+            enrichment.seoScores = await groqScoreSEO({ ...lead, website: enrichment.website }, enrichment.seoData);
           } catch (e) {
-            console.log("SEO scoring error:", e.message);
-            enrichment.seoScores = { error: e.message };
+            enrichment.seoScores = null;
           }
-        } else {
-          console.log("Skipping SEO scoring - seoData:", !!enrichment.seoData, "groq:", !!groq);
-          enrichment.seoScores = { error: "no seoData or groq" };
         }
 
       } catch { /* website not reachable */ }
