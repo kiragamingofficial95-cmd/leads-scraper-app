@@ -38,7 +38,7 @@
     .stats-bar{display:flex;gap:1rem;margin-top:1.5rem;flex-wrap:wrap}
     .stat{flex:1;min-width:100px;padding:1rem;background:var(--bg);border:1px solid var(--border);border-radius:10px;text-align:center}
     .stat-num{font-size:1.8rem;font-weight:700}
-    .stat-num.green{color:var(--green)}.stat-num.yellow{color:var(--yellow)}.stat-num.purple{color:#a855f7}.stat-num.blue{color:#3b82f6}
+    .stat-num.green{color:var(--green)}.stat-num.yellow{color:var(--yellow)}.stat-num.purple{color:#a855f7}.stat-num.blue{color:#3b82f6}.stat-num.red{color:var(--red)}
     .stat-label{font-size:.7rem;color:var(--muted);text-transform:uppercase;margin-top:.25rem}
 
     .export-bar{display:flex;gap:.75rem;margin-top:1.5rem}
@@ -137,10 +137,10 @@
     function csvEscape(v){return'"'+String(v||'').replace(/"/g,'""')+'"'}
 
     function buildCSV(data){
-      const h=['Name','Rating','Reviews','Address','Phone','URL','Website','Qualified','Score','Reason','Industry','Potential Need','Pitch Angle','SEO Score','Overall Score','Emails','Twitter','LinkedIn','Instagram','Facebook','YouTube'];
-      const rows=data.map(d=>{
+      const h=['Rank','Name','Rating','Reviews','Address','Phone','Hours','URL','Website','No Website','Pitch Priority','Pitch Need','Qualified','Score','Reason','Industry','Potential Need','Pitch Angle','SEO Score','Overall Score','Emails','Twitter','LinkedIn','Instagram','Facebook','YouTube'];
+      const rows=data.map((d,idx)=>{
         const l=d.lead||{},e=d.enrichment||{},s=e.seoScores||{};
-        return[csvEscape(l.name),csvEscape(l.rating),csvEscape(l.reviews),csvEscape(l.address),csvEscape(l.phone),csvEscape(l.url),csvEscape(l.website),csvEscape(d.qualified?'Yes':'No'),csvEscape(d.score),csvEscape(d.reason),csvEscape(d.industry),csvEscape(d.potentialNeed),csvEscape(d.pitchAngle),csvEscape(s.seoScore),csvEscape(s.overallScore),csvEscape((e.emails||[]).join('; ')),csvEscape(e.social?.twitter),csvEscape(e.social?.linkedin),csvEscape(e.social?.instagram),csvEscape(e.social?.facebook),csvEscape(e.social?.youtube)].join(',')
+        return[idx+1,csvEscape(l.name),csvEscape(l.rating),csvEscape(l.reviews),csvEscape(l.address),csvEscape(l.phone),csvEscape(l.hours),csvEscape(l.url),csvEscape(l.website),csvEscape(!l.website?'Yes':'No'),csvEscape(l.pitchPriority),csvEscape(l.pitchNeed),csvEscape(d.qualified?'Yes':'No'),csvEscape(d.score),csvEscape(d.reason),csvEscape(d.industry),csvEscape(d.potentialNeed),csvEscape(d.pitchAngle),csvEscape(s.seoScore),csvEscape(s.overallScore),csvEscape((e.emails||[]).join('; ')),csvEscape(e.social?.twitter),csvEscape(e.social?.linkedin),csvEscape(e.social?.instagram),csvEscape(e.social?.facebook),csvEscape(e.social?.youtube)].join(',')
       });
       return[h.join(','),...rows].join('\n')
     }
@@ -198,40 +198,50 @@
 
     function renderResults(data,totalScraped){
       const qCount=data.filter(d=>d.qualified).length;
+      const noWeb=data.filter(d=>!d.lead?.website).length;
       const wEmails=data.filter(d=>d.enrichment?.emails?.length).length;
-      const wSocial=data.filter(d=>{const s=d.enrichment?.social||{};return s.twitter||s.linkedin||s.instagram||s.facebook}).length;
       const wSEO=data.filter(d=>d.enrichment?.seoScores?.seoScore).length;
 
       document.getElementById('stats').style.display='flex';
       document.getElementById('stats').innerHTML=`
         <div class="stat"><div class="stat-num purple">${totalScraped}</div><div class="stat-label">Scraped</div></div>
+        <div class="stat"><div class="stat-num red">${noWeb}</div><div class="stat-label">No Website</div></div>
         <div class="stat"><div class="stat-num green">${qCount}</div><div class="stat-label">Qualified</div></div>
         <div class="stat"><div class="stat-num yellow">${wEmails}</div><div class="stat-label">With Emails</div></div>
         <div class="stat"><div class="stat-num blue">${wSEO}</div><div class="stat-label">SEO Scored</div></div>
       `;
       document.getElementById('export').style.display='flex';
 
-      if(!data.length){document.getElementById('results').innerHTML='<div class="empty"><div class="empty-icon">🤔</div>No leads qualified. Try a different query.</div>';return}
+      if(!data.length){document.getElementById('results').innerHTML='<div class="empty"><div class="empty-icon">🤔</div>No leads found. Try a different query.</div>';return}
 
-      document.getElementById('results').innerHTML=data.map(d=>{
+      document.getElementById('results').innerHTML=data.map((d,idx)=>{
         const l=d.lead||{},e=d.enrichment||{},s=e.seoScores||{},seo=e.seoData||{};
+        const noSite=!l.website;
+        const priority=l.pitchPriority||0;
+        const priorityLabel=priority>=70?'🔥 Hot Lead':priority>=50?'🎯 High Priority':priority>=30?'📊 Medium':'📋 Low';
         return`
-        <div class="lead-card">
+        <div class="lead-card" style="${noSite?'border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.03)':''}">
           <div class="lead-top">
-            <div class="lead-name">${l.name||'Unknown'}</div>
+            <div class="lead-name">
+              <span style="color:var(--muted);font-size:.8rem;margin-right:.5rem">#${idx+1}</span>
+              ${l.name||'Unknown'}
+              ${noSite?'<span style="margin-left:.5rem;padding:.15rem .5rem;border-radius:12px;font-size:.7rem;font-weight:700;background:rgba(239,68,68,.15);color:var(--red)">NO WEBSITE</span>':''}
+            </div>
             <div class="scores">
               ${s.seoScore?`<div class="score-badge ${seoClass(s.seoScore)}">🔍 SEO ${s.seoScore}/10</div>`:''}
               <div class="score-badge ${scoreClass(d.score)}">⭐ ${d.score||0}/10</div>
+              <div class="score-badge" style="background:rgba(99,102,241,.1);color:var(--accent)">${priorityLabel}</div>
             </div>
           </div>
           <div class="lead-meta">
             ${l.rating?`<span class="meta-tag">⭐ ${l.rating} (${l.reviews||0})</span>`:''}
             ${l.phone?`<span class="meta-tag">📞 ${l.phone}</span>`:''}
             ${d.industry?`<span class="meta-tag">🏢 ${d.industry}</span>`:''}
+            ${l.hours?`<span class="meta-tag">🕐 ${l.hours}</span>`:''}
           </div>
           ${l.address?`<div class="detail-row"><span class="detail-label">Address</span><span class="detail-val">${l.address}</span></div>`:''}
+          ${l.pitchNeed||d.potentialNeed?`<div class="detail-row"><span class="detail-label">Need</span><span class="detail-val">${l.pitchNeed||d.potentialNeed||'N/A'}</span></div>`:''}
           <div class="detail-row"><span class="detail-label">Reason</span><span class="detail-val">${d.reason||'N/A'}</div>
-          <div class="detail-row"><span class="detail-label">Need</span><span class="detail-val">${d.potentialNeed||'N/A'}</div>
           ${d.pitchAngle?`<div class="pitch-box"><div class="pitch-label">💡 Pitch Angle</div>${d.pitchAngle}</div>`:''}
           ${l.url?`<div class="detail-row" style="margin-top:.5rem"><span class="detail-label">Maps</span><span class="detail-val"><a href="${l.url}" target="_blank">Open in Google Maps →</a></span></div>`:''}
           ${l.website?`<div class="detail-row"><span class="detail-label">Website</span><span class="detail-val"><a href="${l.website}" target="_blank">${l.website}</a></span></div>`:''}

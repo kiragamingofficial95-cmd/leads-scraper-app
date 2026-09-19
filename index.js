@@ -117,50 +117,125 @@ app.post("/api/scrape", async (req, res) => {
         await page.goto(lead.url, { waitUntil: "domcontentloaded", timeout: 20000 });
         await new Promise(r => setTimeout(r, 3000));
 
-        const website = await page.evaluate(() => {
+        const details = await page.evaluate(() => {
+          const result = { website: "", phone2: "", hours: "", plusCode: "", status: "" };
+
           const authorityEl = document.querySelector('a[data-item-id="authority"]');
           if (authorityEl && authorityEl.href && !authorityEl.href.includes("google.com/maps")) {
-            return authorityEl.href;
+            result.website = authorityEl.href;
+          } else {
+            const btns = document.querySelectorAll('button[data-item-id="authority"], a[data-item-id="authority"]');
+            for (const btn of btns) {
+              const h = btn.href || btn.getAttribute("data-href") || "";
+              if (h && !h.includes("google.com/maps")) { result.website = h; break; }
+            }
           }
 
-          const btns = document.querySelectorAll('button[data-item-id="authority"], a[data-item-id="authority"]');
-          for (const btn of btns) {
-            const h = btn.href || btn.getAttribute("data-href") || "";
-            if (h && !h.includes("google.com/maps")) return h;
+          if (!result.website) {
+            const ariaLinks = document.querySelectorAll('a[aria-label]');
+            for (const a of ariaLinks) {
+              const label = (a.getAttribute("aria-label") || "").toLowerCase();
+              if (label.includes("website") && a.href && !a.href.includes("google.com/maps")) {
+                result.website = a.href;
+                break;
+              }
+            }
           }
 
-          const ariaLinks = document.querySelectorAll('a[aria-label]');
-          for (const a of ariaLinks) {
-            const label = (a.getAttribute("aria-label") || "").toLowerCase();
-            if (label.includes("website") && a.href && !a.href.includes("google.com/maps")) {
-              return a.href;
+          if (!result.website) {
+            const mainPanel = document.querySelector('[role="main"]');
+            if (mainPanel) {
+              const links = mainPanel.querySelectorAll('a[href]');
+              for (const link of links) {
+                const href = link.href;
+                if (href
+                  && !href.includes("google.com")
+                  && !href.includes("gstatic.com")
+                  && !href.includes("googleapis.com")
+                  && !href.includes("youtube.com")
+                  && !href.includes("maps")) {
+                  result.website = href;
+                  break;
+                }
+              }
+            }
+          }
+
+          const phoneEl = document.querySelector('button[data-item-id^="phone:tel:"]');
+          if (phoneEl) {
+            const tel = phoneEl.getAttribute("data-item-id") || "";
+            result.phone2 = tel.replace("phone:tel:", "").trim();
+          }
+
+          const allButtons = document.querySelectorAll('button');
+          for (const btn of allButtons) {
+            const label = (btn.getAttribute("aria-label") || "").toLowerCase();
+            const text = btn.innerText.toLowerCase();
+            if (label.includes("open") || label.includes("closed") || text.includes("open") || text.includes("closed")) {
+              result.hours = btn.getAttribute("aria-label") || btn.innerText.trim();
+              break;
             }
           }
 
           const mainPanel = document.querySelector('[role="main"]');
           if (mainPanel) {
-            const links = mainPanel.querySelectorAll('a[href]');
-            for (const link of links) {
-              const href = link.href;
-              if (href
-                && !href.includes("google.com")
-                && !href.includes("gstatic.com")
-                && !href.includes("googleapis.com")
-                && !href.includes("youtube.com")
-                && !href.includes("maps")) {
-                return href;
+            const spans = mainPanel.querySelectorAll('span');
+            for (const span of spans) {
+              const text = span.innerText.trim();
+              if (text.match(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/i)) {
+                result.hours = text;
+                break;
               }
             }
           }
 
-          return "";
+          const statusEl = document.querySelector('[data-item-id="oh"]');
+          if (statusEl) result.status = statusEl.innerText.trim();
+
+          return result;
         });
 
-        if (website) lead.website = website;
+        if (details.website) lead.website = details.website;
+        if (details.phone2 && !lead.phone) lead.phone = details.phone2;
+        if (details.hours) lead.hours = details.hours;
+        if (details.status) lead.hours = details.status;
       } catch {
         // listing page failed to load, skip
       }
     }
+
+    for (const lead of leads) {
+      let priority = 0;
+      if (!lead.website || lead.website === "") {
+        priority += 50;
+        lead.pitchNeed = "Full website creation";
+      } else {
+        priority += 10;
+        lead.pitchNeed = "Website redesign or optimization";
+      }
+
+      const rating = parseFloat(lead.rating) || 0;
+      const reviews = parseInt(lead.reviews) || 0;
+
+      if (rating >= 4.0 && reviews >= 10) priority += 20;
+      else if (rating >= 3.5 && reviews >= 5) priority += 15;
+      else if (reviews >= 1) priority += 10;
+      else priority += 5;
+
+      if (!lead.website) {
+        if (rating >= 4.0) priority += 15;
+        else if (rating >= 3.0) priority += 10;
+        else priority += 5;
+      }
+
+      const lowWebsiteCats = ["restaurant", "food", "cafe", "pizza", "bar", "salon", "spa", "dentist", "doctor", "lawyer", "plumber", "electrician", "contractor", "repair", "cleaning", "landscaping", "auto", "mechanic", "real estate", "insurance", "tax", "accounting", "gym", "fitness", "yoga", "pet", "veterinary"];
+      const cat = (lead.category || "").toLowerCase();
+      if (lowWebsiteCats.some(c => cat.includes(c))) priority += 10;
+
+      lead.pitchPriority = priority;
+    }
+
+    leads.sort((a, b) => (b.pitchPriority || 0) - (a.pitchPriority || 0));
 
     await browser.close();
     return res.status(200).json({ leads, query, location });
