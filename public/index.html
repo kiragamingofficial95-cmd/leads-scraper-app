@@ -167,7 +167,7 @@
           try{
             const fr=await fetch(`${API}/api/filter`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(leads[i])});
             const fd=await fr.json();
-            if(!fd.error&&fd.qualified)qualified.push(fd);
+            if(!fd.error)qualified.push(fd);
             document.getElementById('results').innerHTML=`<div class="empty"><div class="spinner"></div><div style="margin-top:1rem">Qualifying leads... ${i+1}/${leads.length}</div></div>`;
           }catch{continue}
         }
@@ -197,7 +197,7 @@
     function seoClass(s){return s>=7?'good':s>=4?'ok':'bad'}
 
     function renderResults(data,totalScraped){
-      const qCount=data.length;
+      const qCount=data.filter(d=>d.qualified).length;
       const wEmails=data.filter(d=>d.enrichment?.emails?.length).length;
       const wSocial=data.filter(d=>{const s=d.enrichment?.social||{};return s.twitter||s.linkedin||s.instagram||s.facebook}).length;
       const wSEO=data.filter(d=>d.enrichment?.seoScores?.seoScore).length;
