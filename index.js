@@ -11,7 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 app.use(express.static(join(__dirname, "public")));
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
@@ -721,6 +721,12 @@ app.post("/api/validate-emails", async (req, res) => {
       dailyLimit: EMAIL_VALIDATION_DAILY_LIMIT
     }
   });
+});
+
+// ─── Global error handler — always return JSON ────────────────────────────────
+app.use((err, req, res, _next) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({ error: err.message || "Internal server error" });
 });
 
 export default app;

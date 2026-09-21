@@ -270,6 +270,12 @@
       document.getElementById('panel-validate').classList.toggle('active',tab==='validate');
     }
 
+    // ─── Safe JSON parse ───
+    async function safeJson(res){
+      const text=await res.text();
+      try{return JSON.parse(text)}catch(e){throw new Error(text.substring(0,300)||`Server returned status ${res.status}`)}
+    }
+
     function setStep(id,state){document.getElementById(id).className='step '+state}
     function setLoading(on){const b=document.getElementById('btn-run'),t=document.getElementById('btn-text');b.disabled=on;t.innerHTML=on?'<span class="spinner"></span> Running pipeline...':'🔍 Run Full Pipeline'}
 
@@ -304,7 +310,7 @@
 
       try{
         const sr=await fetch(`${API}/api/scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:keywords,location})});
-        const sd=await sr.json();if(sd.error)throw new Error(sd.error);
+        const sd=await safeJson(sr);if(sd.error)throw new Error(sd.error);
         const leads=sd.leads||[];
         if(!leads.length){setStep('step-scrape','fail');document.getElementById('results').innerHTML='<div class="empty"><div class="empty-icon">🔍</div>No leads found. Try different search terms or location.</div>';setLoading(false);return}
         setStep('step-scrape','done');
@@ -314,7 +320,7 @@
         for(let i=0;i<leads.length;i++){
           try{
             const fr=await fetch(`${API}/api/filter`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(leads[i])});
-            const fd=await fr.json();
+            const fd=await safeJson(fr);
             if(!fd.error){
               qualified.push(fd);
             }
@@ -327,7 +333,7 @@
         for(let i=0;i<qualified.length;i++){
           try{
             const er=await fetch(`${API}/api/enrich`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(qualified[i].lead)});
-            const ed=await er.json();
+            const ed=await safeJson(er);
             qualified[i].enrichment=ed.enrichment||{};
             qualified[i].lead={...qualified[i].lead,...(ed.lead||{})};
             document.getElementById('results').innerHTML=`<div class="empty"><div class="spinner"></div><div style="margin-top:1rem">Enriching + SEO scoring... ${i+1}/${qualified.length}</div></div>`;
@@ -549,7 +555,7 @@
           method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({emails})
         });
-        const data=await resp.json();
+        const data=await safeJson(resp);
         if(data.error)throw new Error(data.error);
         renderValidationResults(data);
         // Update remaining badge
