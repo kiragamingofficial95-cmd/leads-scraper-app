@@ -46,12 +46,21 @@ app.post("/api/scrape", async (req, res) => {
 
   let browser;
   try {
-    browser = await puppeteer.launch({
-      headless: chromium.headless,
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-    });
+    // Use @sparticuz/chromium on Vercel (Linux), regular puppeteer locally (Windows/Mac)
+    const isVercel = !!process.env.VERCEL;
+    if (isVercel) {
+      browser = await puppeteer.launch({
+        headless: chromium.headless,
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+      });
+    } else {
+      browser = await puppeteer.launch({
+        headless: "new",
+        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+      });
+    }
 
     const page = await browser.newPage();
     await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
@@ -728,5 +737,13 @@ app.use((err, req, res, _next) => {
   console.error("Unhandled error:", err);
   res.status(500).json({ error: err.message || "Internal server error" });
 });
+
+// ─── Local dev server ────────────────────────────────────────────────────────
+const PORT = process.env.PORT || 3000;
+if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`LeadScraper AI running on http://localhost:${PORT}`);
+  });
+}
 
 export default app;
