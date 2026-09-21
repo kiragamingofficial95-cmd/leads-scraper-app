@@ -135,7 +135,14 @@
     .email-disposable{color:var(--red);font-size:.75rem;font-weight:500}
     .remaining-badge{display:inline-flex;align-items:center;gap:.3rem;padding:.3rem .7rem;border-radius:12px;font-size:.8rem;font-weight:500;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);color:#3b82f6}
 
-    @media(max-width:640px){.container{padding:1rem}header h1{font-size:1.75rem}.form-row{flex-direction:column}.stats-bar{flex-direction:column}.export-bar{flex-direction:column}.scores{flex-direction:column;align-items:flex-end}.email-table{font-size:.75rem}.email-table th,.email-table td{padding:.4rem .5rem}}
+    .keyword-list{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem}
+    .keyword-tag{display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .8rem;border-radius:8px;font-size:.85rem;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.25);color:var(--accent);font-weight:500}
+    .keyword-tag .remove-keyword{cursor:pointer;opacity:.6;transition:opacity .2s;font-size:1rem;line-height:1}
+    .keyword-tag .remove-keyword:hover{opacity:1;color:var(--red)}
+    .keyword-input-row{display:flex;gap:.5rem}
+    .keyword-input-row input{flex:1}
+
+    @media(max-width:640px){.container{padding:1rem}header h1{font-size:1.75rem}.form-row{flex-direction:column}.stats-bar{flex-direction:column}.export-bar{flex-direction:column}.scores{flex-direction:column;align-items:flex-end}.email-table{font-size:.75rem}.email-table th,.email-table td{padding:.4rem .5rem}.keyword-input-row{flex-direction:column}}
   </style>
 </head>
 <body>
@@ -154,8 +161,16 @@
     <!-- ─── LEAD SCRAPER PANEL ─── -->
     <div id="panel-scrape" class="panel active">
       <div class="search-box">
+        <div class="form-group" style="margin-bottom:.75rem">
+          <label>Search Keywords (add multiple)</label>
+          <div class="keyword-list" id="keyword-list"></div>
+          <div class="keyword-input-row">
+            <input type="text" id="query-input" placeholder="e.g. dentist, restaurant, gym, salon" onkeydown="if(event.key==='Enter'){event.preventDefault();addKeyword()}">
+            <button class="btn btn-secondary" style="width:auto;padding:.7rem 1.2rem;font-size:.85rem" onclick="addKeyword()">+ Add</button>
+          </div>
+          <div style="font-size:.7rem;color:var(--muted);margin-top:.3rem">Press Enter or click Add. Each keyword is searched separately and results are combined.</div>
+        </div>
         <div class="form-row">
-          <div class="form-group"><label>Search Query</label><input type="text" id="query" placeholder="e.g. interior designer, dentist, restaurant"></div>
           <div class="form-group"><label>Location</label><input type="text" id="location" placeholder="e.g. Noida, New York, London"></div>
         </div>
         <button class="btn btn-primary" id="btn-run" onclick="runPipeline()"><span id="btn-text">🔍 Run Full Pipeline</span></button>
@@ -218,6 +233,35 @@
     let currentFilter='all';
     let csvRows=[];
     let csvHeaders=[];
+    let keywords=[];
+
+    // ─── Keyword management ───
+    function addKeyword(){
+      const input=document.getElementById('query-input');
+      const val=input.value.trim();
+      if(!val)return;
+      // Split by comma in case user types "dentist, restaurant"
+      const parts=val.split(',').map(s=>s.trim()).filter(Boolean);
+      for(const p of parts){
+        if(!keywords.some(k=>k.toLowerCase()===p.toLowerCase())){
+          keywords.push(p);
+        }
+      }
+      input.value='';
+      renderKeywords();
+    }
+
+    function removeKeyword(idx){
+      keywords.splice(idx,1);
+      renderKeywords();
+    }
+
+    function renderKeywords(){
+      const list=document.getElementById('keyword-list');
+      list.innerHTML=keywords.map((k,i)=>
+        `<div class="keyword-tag">${k}<span class="remove-keyword" onclick="removeKeyword(${i})">×</span></div>`
+      ).join('');
+    }
 
     // ─── Tab switching ───
     function switchTab(tab){
@@ -236,10 +280,10 @@
     function csvEscape(v){return'"'+String(v||'').replace(/"/g,'""')+'"'}
 
     function buildCSV(data){
-      const h=['Name','Rating','Reviews','Address','Phone','URL','Website','Has Website','Qualified','Score','Reason','Industry','Potential Need','Pitch Angle','SEO Score','Overall Score','SEO Issues','Emails','Twitter','LinkedIn','Instagram','Facebook','YouTube'];
+      const h=['Name','Search Keyword','Rating','Reviews','Address','Phone','URL','Website','Has Website','Qualified','Score','Reason','Industry','Potential Need','Pitch Angle','SEO Score','Overall Score','SEO Issues','Emails','Twitter','LinkedIn','Instagram','Facebook','YouTube'];
       const rows=data.map(d=>{
         const l=d.lead||{},e=d.enrichment||{},s=e.seoScores||{};
-        return[csvEscape(l.name),csvEscape(l.rating),csvEscape(l.reviews),csvEscape(l.address),csvEscape(l.phone),csvEscape(l.url),csvEscape(l.website),csvEscape(l.website?'Yes':'No'),csvEscape(d.qualified?'Yes':'No'),csvEscape(d.score),csvEscape(d.reason),csvEscape(d.industry),csvEscape(d.potentialNeed),csvEscape(d.pitchAngle),csvEscape(s.seoScore),csvEscape(s.overallScore),csvEscape((s.seoIssues||[]).join('; ')),csvEscape((e.emails||[]).join('; ')),csvEscape(e.social?.twitter),csvEscape(e.social?.linkedin),csvEscape(e.social?.instagram),csvEscape(e.social?.facebook),csvEscape(e.social?.youtube)].join(',')
+        return[csvEscape(l.name),csvEscape(l.searchKeyword),csvEscape(l.rating),csvEscape(l.reviews),csvEscape(l.address),csvEscape(l.phone),csvEscape(l.url),csvEscape(l.website),csvEscape(l.website?'Yes':'No'),csvEscape(d.qualified?'Yes':'No'),csvEscape(d.score),csvEscape(d.reason),csvEscape(d.industry),csvEscape(d.potentialNeed),csvEscape(d.pitchAngle),csvEscape(s.seoScore),csvEscape(s.overallScore),csvEscape((s.seoIssues||[]).join('; ')),csvEscape((e.emails||[]).join('; ')),csvEscape(e.social?.twitter),csvEscape(e.social?.linkedin),csvEscape(e.social?.instagram),csvEscape(e.social?.facebook),csvEscape(e.social?.youtube)].join(',')
       });
       return[h.join(','),...rows].join('\n')
     }
@@ -248,8 +292,9 @@
     function exportQualifiedCSV(){const q=allData.filter(d=>d.qualified);if(!q.length)return;dl('leads-qualified-'+Date.now()+'.csv',buildCSV(q),'text/csv')}
 
     async function runPipeline(){
-      const query=document.getElementById('query').value.trim(),location=document.getElementById('location').value.trim();
-      if(!query||!location)return alert('Enter both query and location');
+      const location=document.getElementById('location').value.trim();
+      if(!keywords.length)return alert('Add at least one search keyword');
+      if(!location)return alert('Enter a location');
       setLoading(true);allData=[];filteredData=[];currentFilter='all';
       document.getElementById('results').innerHTML='';
       document.getElementById('stats').style.display='none';
@@ -258,10 +303,10 @@
       setStep('step-scrape','active');setStep('step-qualify','');setStep('step-enrich','');
 
       try{
-        const sr=await fetch(`${API}/api/scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query,location})});
+        const sr=await fetch(`${API}/api/scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:keywords,location})});
         const sd=await sr.json();if(sd.error)throw new Error(sd.error);
         const leads=sd.leads||[];
-        if(!leads.length){setStep('step-scrape','fail');document.getElementById('results').innerHTML='<div class="empty"><div class="empty-icon">🔍</div>No leads found. Try different search terms.</div>';setLoading(false);return}
+        if(!leads.length){setStep('step-scrape','fail');document.getElementById('results').innerHTML='<div class="empty"><div class="empty-icon">🔍</div>No leads found. Try different search terms or location.</div>';setLoading(false);return}
         setStep('step-scrape','done');
 
         setStep('step-qualify','active');
@@ -359,12 +404,14 @@
           ?`<div class="score-badge qualified">✅ Qualified</div>`
           :`<div class="score-badge not-qualified">❌ Not Qualified</div>`;
         const webBadge=!hasWeb?`<div class="score-badge no-website">🌐 No Website</div>`:'';
+        const kwBadge=l.searchKeyword?`<div class="score-badge blue" style="font-size:.7rem">🔑 ${l.searchKeyword}</div>`:'';
 
         return`
         <div class="lead-card ${d.qualified?'':'not-qualified'}">
           <div class="lead-top">
             <div class="lead-name">${l.name||'Unknown'}</div>
             <div class="scores">
+              ${kwBadge}
               ${webBadge}
               ${s.seoScore?`<div class="score-badge ${seoClass(s.seoScore)}">🔍 SEO ${s.seoScore}/10</div>`:''}
               <div class="score-badge ${scoreClass(d.score)}">⭐ ${d.score||0}/10</div>

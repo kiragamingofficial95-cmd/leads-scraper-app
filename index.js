@@ -40,6 +40,10 @@ app.post("/api/scrape", async (req, res) => {
   const { query, location } = req.body;
   if (!query || !location) return res.status(400).json({ error: "query and location required" });
 
+  // Support both single string and array of queries
+  const queries = Array.isArray(query) ? query.filter(q => q && q.trim()) : [query];
+  if (queries.length === 0) return res.status(400).json({ error: "At least one query required" });
+
   let browser;
   try {
     browser = await puppeteer.launch({
@@ -53,71 +57,94 @@ app.post("/api/scrape", async (req, res) => {
     await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
     await page.setViewport({ width: 1280, height: 720 });
 
-    const search = encodeURIComponent(`${query} in ${location}`);
-    await page.goto(`${GOOGLE_MAPS_URL}${search}`, { waitUntil: "networkidle2", timeout: 45000 });
-    await new Promise(r => setTimeout(r, 4000));
+    // Extract leads from current Google Maps page
+    async function extractLeads(searchQuery) {
+      const search = encodeURIComponent(`${searchQuery} in ${location}`);
+      await page.goto(`${GOOGLE_MAPS_URL}${search}`, { waitUntil: "networkidle2", timeout: 45000 });
+      await new Promise(r => setTimeout(r, 4000));
 
-    for (let i = 0; i < 6; i++) {
-      await page.evaluate(() => {
+      for (let i = 0; i < 6; i++) {
+        await page.evaluate(() => {
+          const feed = document.querySelector('[role="feed"]');
+          if (feed) feed.scrollTop = feed.scrollHeight;
+          window.scrollBy(0, window.innerHeight);
+        });
+        await new Promise(r => setTimeout(r, 1500));
+      }
+
+      return await page.evaluate((keyword) => {
+        const results = [];
         const feed = document.querySelector('[role="feed"]');
-        if (feed) feed.scrollTop = feed.scrollHeight;
-        window.scrollBy(0, window.innerHeight);
-      });
-      await new Promise(r => setTimeout(r, 1500));
+        if (!feed) return results;
+
+        const items = feed.querySelectorAll(':scope > div > div');
+        items.forEach(item => {
+          const nameEl = item.querySelector('.qBF1Pd, .fontHeadlineSmall, [class*="fontHeadlineSmall"]');
+          if (!nameEl) return;
+          const name = nameEl.innerText.trim();
+          if (!name) return;
+
+          const allText = item.innerText || "";
+          const lines = allText.split('\n').map(l => l.trim()).filter(Boolean);
+          let rating = "", reviews = "", category = "", address = "", phone = "", url = "", website = "";
+
+          const ratingMatch = allText.match(/(\d+\.?\d*)\s*stars?/i) || allText.match(/(\d+\.?\d*)\s*\(/);
+          if (ratingMatch) rating = ratingMatch[1];
+
+          const reviewsMatch = allText.match(/\((\d[\d,]*)\)/);
+          if (reviewsMatch) reviews = reviewsMatch[1].replace(/,/g, "");
+
+          const linkEl = item.querySelector('a[href*="maps"]');
+          if (linkEl) url = linkEl.href;
+
+          const phoneMatch = allText.match(/(\+?\d[\d\s\-()]{7,})/);
+          if (phoneMatch) phone = phoneMatch[1].trim();
+
+          const webMatch = allText.match(/(?:https?:\/\/)?(?:www\.)?([a-zA-Z0-9-]+\.[a-z]{2,})/);
+          if (webMatch && !webMatch[0].includes("google") && !webMatch[0].includes("gstatic")) {
+            website = webMatch[0].startsWith("http") ? webMatch[0] : "https://" + webMatch[0];
+          }
+
+          for (const line of lines) {
+            if (!address && (line.includes("St") || line.includes("Rd") || line.includes("Ave") || line.includes("Dr") || line.includes("Blvd") || line.includes("Way") || line.includes("Ln") || /\d+.*(?:street|road|avenue|drive|boulevard|lane)/i.test(line))) {
+              address = line;
+            }
+          }
+
+          if (address && lines.indexOf(address) > 0) {
+            const catLine = lines[lines.indexOf(address) - 1];
+            if (catLine && catLine !== name && !catLine.match(/^\d/)) category = catLine;
+          }
+
+          results.push({ name, rating, reviews, category, address, phone, url, website, searchKeyword: keyword });
+        });
+
+        return results;
+      }, searchQuery);
     }
 
-    const leads = await page.evaluate(() => {
-      const results = [];
-      const feed = document.querySelector('[role="feed"]');
-      if (!feed) return results;
+    // Scrape all queries and deduplicate by name+address
+    const allLeads = [];
+    const seen = new Set();
 
-      const items = feed.querySelectorAll(':scope > div > div');
-      items.forEach(item => {
-        const nameEl = item.querySelector('.qBF1Pd, .fontHeadlineSmall, [class*="fontHeadlineSmall"]');
-        if (!nameEl) return;
-        const name = nameEl.innerText.trim();
-        if (!name) return;
-
-        const allText = item.innerText || "";
-        const lines = allText.split('\n').map(l => l.trim()).filter(Boolean);
-        let rating = "", reviews = "", category = "", address = "", phone = "", url = "", website = "";
-
-        const ratingMatch = allText.match(/(\d+\.?\d*)\s*stars?/i) || allText.match(/(\d+\.?\d*)\s*\(/);
-        if (ratingMatch) rating = ratingMatch[1];
-
-        const reviewsMatch = allText.match(/\((\d[\d,]*)\)/);
-        if (reviewsMatch) reviews = reviewsMatch[1].replace(/,/g, "");
-
-        const linkEl = item.querySelector('a[href*="maps"]');
-        if (linkEl) url = linkEl.href;
-
-        const phoneMatch = allText.match(/(\+?\d[\d\s\-()]{7,})/);
-        if (phoneMatch) phone = phoneMatch[1].trim();
-
-        const webMatch = allText.match(/(?:https?:\/\/)?(?:www\.)?([a-zA-Z0-9-]+\.[a-z]{2,})/);
-        if (webMatch && !webMatch[0].includes("google") && !webMatch[0].includes("gstatic")) {
-          website = webMatch[0].startsWith("http") ? webMatch[0] : "https://" + webMatch[0];
-        }
-
-        for (const line of lines) {
-          if (!address && (line.includes("St") || line.includes("Rd") || line.includes("Ave") || line.includes("Dr") || line.includes("Blvd") || line.includes("Way") || line.includes("Ln") || /\d+.*(?:street|road|avenue|drive|boulevard|lane)/i.test(line))) {
-            address = line;
+    for (const q of queries) {
+      try {
+        const leads = await extractLeads(q.trim());
+        for (const lead of leads) {
+          const key = `${lead.name}|||${lead.address}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            allLeads.push(lead);
           }
         }
-
-        if (address && lines.indexOf(address) > 0) {
-          const catLine = lines[lines.indexOf(address) - 1];
-          if (catLine && catLine !== name && !catLine.match(/^\d/)) category = catLine;
-        }
-
-        results.push({ name, rating, reviews, category, address, phone, url, website });
-      });
-
-      return results;
-    });
+      } catch (err) {
+        // If one keyword fails, continue with the rest
+        continue;
+      }
+    }
 
     await browser.close();
-    return res.status(200).json({ leads, query, location });
+    return res.status(200).json({ leads: allLeads, queries, location });
   } catch (error) {
     if (browser) await browser.close().catch(() => {});
     return res.status(500).json({ error: error.message });
