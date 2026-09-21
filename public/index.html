@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeadScraper AI</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    :root{--bg:#0a0a0f;--card:#12121a;--border:#1e1e2e;--accent:#6366f1;--accent2:#8b5cf6;--green:#22c55e;--red:#ef4444;--yellow:#eab308;--text:#e4e4e7;--muted:#71717a}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+    .gradient-bg{position:fixed;top:0;left:0;right:0;bottom:0;background:radial-gradient(ellipse at 20% 0%,rgba(99,102,241,.15) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,.1) 0%,transparent 50%);pointer-events:none;z-index:0}
+    .container{position:relative;z-index:1;max-width:900px;margin:0 auto;padding:2rem}
+    header{text-align:center;margin-bottom:2rem}
+    header h1{font-size:2.5rem;font-weight:700;background:linear-gradient(135deg,#6366f1,#a855f7,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:.5rem}
+    header p{color:var(--muted);font-size:1.05rem}
+
+    .tabs{display:flex;gap:.5rem;margin-bottom:1.5rem}
+    .tab{padding:.6rem 1.2rem;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--muted);font-size:.9rem;font-weight:500;cursor:pointer;transition:all .2s}
+    .tab.active{border-color:var(--accent);color:var(--accent);background:rgba(99,102,241,.1)}
+    .tab:hover{border-color:var(--accent)}
+
+    .panel{display:none}.panel.active{display:block}
+
+    .search-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:2rem;margin-bottom:2rem}
+    .form-row{display:flex;gap:1rem;margin-bottom:1rem}
+    .form-group{flex:1;display:flex;flex-direction:column;gap:.4rem}
+    label{font-size:.8rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    input,select{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.75rem 1rem;color:var(--text);font-size:.95rem;transition:border-color .2s}
+    input:focus,select:focus{outline:none;border-color:var(--accent)}
+    .btn{width:100%;padding:.9rem;border:none;border-radius:10px;font-size:1rem;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:.6rem}
+    .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+    .btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 24px rgba(99,102,241,.4)}
+    .btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
+    .btn-secondary{background:var(--card);border:1px solid var(--border);color:var(--text)}
+    .btn-secondary:hover{border-color:var(--accent);background:rgba(99,102,241,.08)}
+
+    .spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    .pipeline-status{display:flex;align-items:center;justify-content:center;gap:.5rem;margin-top:1.25rem;flex-wrap:wrap}
+    .step{display:flex;align-items:center;gap:.4rem;padding:.4rem .9rem;border-radius:20px;font-size:.8rem;font-weight:500;background:rgba(255,255,255,.03);border:1px solid var(--border);color:var(--muted);transition:all .3s}
+    .step.active{border-color:var(--accent);color:var(--accent);background:rgba(99,102,241,.1)}
+    .step.done{border-color:var(--green);color:var(--green);background:rgba(34,197,94,.1)}
+    .step.fail{border-color:var(--red);color:var(--red);background:rgba(239,68,68,.1)}
+    .arrow{color:var(--muted);font-size:.9rem}
+
+    .stats-bar{display:flex;gap:1rem;margin-top:1.5rem;flex-wrap:wrap}
+    .stat{flex:1;min-width:100px;padding:1rem;background:var(--bg);border:1px solid var(--border);border-radius:10px;text-align:center}
+    .stat-num{font-size:1.8rem;font-weight:700}
+    .stat-num.green{color:var(--green)}.stat-num.yellow{color:var(--yellow)}.stat-num.purple{color:#a855f7}.stat-num.blue{color:#3b82f6}.stat-num.red{color:var(--red)}
+    .stat-label{font-size:.7rem;color:var(--muted);text-transform:uppercase;margin-top:.25rem}
+
+    .export-bar{display:flex;gap:.75rem;margin-top:1.5rem;flex-wrap:wrap}
+    .btn-export{flex:1;padding:.7rem;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:.85rem;font-weight:500;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:.5rem}
+    .btn-export:hover{border-color:var(--accent);background:rgba(99,102,241,.08)}
+
+    .filter-bar{display:flex;gap:.75rem;margin-top:1rem;flex-wrap:wrap;align-items:center}
+    .filter-pill{padding:.4rem .9rem;border-radius:20px;font-size:.8rem;font-weight:500;border:1px solid var(--border);background:var(--card);color:var(--muted);cursor:pointer;transition:all .2s}
+    .filter-pill.active{border-color:var(--accent);color:var(--accent);background:rgba(99,102,241,.1)}
+    .filter-pill:hover{border-color:var(--accent)}
+
+    .results{margin-top:1.5rem;display:flex;flex-direction:column;gap:1rem}
+    .lead-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.25rem;transition:all .2s}
+    .lead-card:hover{border-color:var(--accent)}
+    .lead-card.not-qualified{opacity:.65}
+    .lead-card.not-qualified:hover{opacity:1}
+    .lead-top{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:.75rem}
+    .lead-name{font-size:1.05rem;font-weight:600;flex:1}
+    .scores{display:flex;gap:.5rem;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+    .score-badge{display:flex;align-items:center;gap:.3rem;padding:.25rem .6rem;border-radius:20px;font-size:.8rem;font-weight:600;white-space:nowrap}
+    .score-badge.high{background:rgba(34,197,94,.15);color:var(--green)}
+    .score-badge.med{background:rgba(234,179,8,.15);color:var(--yellow)}
+    .score-badge.low{background:rgba(239,68,68,.15);color:var(--red)}
+    .score-badge.blue{background:rgba(59,130,246,.15);color:#3b82f6}
+    .score-badge.qualified{background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.3)}
+    .score-badge.not-qualified{background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.2)}
+    .score-badge.no-website{background:rgba(234,179,8,.15);color:var(--yellow);border:1px solid rgba(234,179,8,.3)}
+
+    .lead-meta{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.5rem}
+    .meta-tag{font-size:.8rem;color:var(--muted);padding:.2rem .6rem;background:rgba(255,255,255,.03);border-radius:4px}
+
+    .lead-detail{margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border)}
+    .detail-row{display:flex;gap:.5rem;margin-bottom:.4rem;font-size:.85rem}
+    .detail-label{color:var(--muted);min-width:80px;flex-shrink:0}
+    .detail-val{color:var(--text);word-break:break-word}
+    .detail-val a{color:var(--accent);text-decoration:none}
+    .detail-val a:hover{text-decoration:underline}
+
+    .reason-box{margin-top:.75rem;padding:.75rem 1rem;background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.15);border-radius:8px;font-size:.85rem;line-height:1.5}
+    .reason-label{font-size:.7rem;color:var(--accent);text-transform:uppercase;font-weight:600;margin-bottom:.3rem}
+
+    .pitch-box{margin-top:.75rem;padding:.75rem 1rem;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.2);border-radius:8px;font-size:.85rem}
+    .pitch-label{font-size:.7rem;color:#a855f7;text-transform:uppercase;font-weight:600;margin-bottom:.3rem}
+
+    .seo-box{margin-top:.75rem;padding:.75rem 1rem;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:8px}
+    .seo-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem;flex-wrap:wrap}
+    .seo-score-pill{display:flex;align-items:center;gap:.3rem;padding:.2rem .6rem;border-radius:12px;font-size:.8rem;font-weight:600}
+    .seo-score-pill.good{background:rgba(34,197,94,.15);color:var(--green)}
+    .seo-score-pill.ok{background:rgba(234,179,8,.15);color:var(--yellow)}
+    .seo-score-pill.bad{background:rgba(239,68,68,.15);color:var(--red)}
+    .seo-issues{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.5rem}
+    .seo-issue{font-size:.75rem;padding:.2rem .5rem;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.15);border-radius:4px;color:var(--red);line-height:1.4}
+    .seo-fix{font-size:.75rem;padding:.2rem .5rem;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.15);border-radius:4px;color:var(--green);line-height:1.4}
+
+    .social-row{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem}
+    .social-pill{display:inline-flex;align-items:center;gap:.3rem;padding:.25rem .6rem;border-radius:6px;font-size:.8rem;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);color:var(--accent);text-decoration:none}
+    .social-pill:hover{background:rgba(99,102,241,.2)}
+    .email-pill{display:inline-flex;align-items:center;gap:.3rem;padding:.25rem .6rem;border-radius:6px;font-size:.8rem;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.15);color:var(--green);font-family:monospace}
+
+    .error-box{padding:1rem;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:8px;color:var(--red);margin-top:1rem}
+    .empty{text-align:center;padding:3rem;color:var(--muted)}
+    .empty-icon{font-size:3rem;margin-bottom:1rem}
+
+    /* Email validator panel */
+    .upload-zone{border:2px dashed var(--border);border-radius:12px;padding:2rem;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:1rem}
+    .upload-zone:hover{border-color:var(--accent);background:rgba(99,102,241,.05)}
+    .upload-zone.dragover{border-color:var(--accent);background:rgba(99,102,241,.1)}
+    .upload-icon{font-size:2.5rem;margin-bottom:.75rem}
+    .upload-text{color:var(--muted);font-size:.9rem}
+
+    .validation-summary{display:flex;gap:1rem;margin:1.5rem 0;flex-wrap:wrap}
+    .v-stat{flex:1;min-width:80px;padding:.75rem;background:var(--bg);border:1px solid var(--border);border-radius:8px;text-align:center}
+    .v-stat-num{font-size:1.4rem;font-weight:700}
+    .v-stat-label{font-size:.65rem;color:var(--muted);text-transform:uppercase;margin-top:.2rem}
+
+    .email-table{width:100%;border-collapse:collapse;margin-top:1rem;font-size:.85rem}
+    .email-table th{text-align:left;padding:.6rem .75rem;border-bottom:2px solid var(--border);color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.5px}
+    .email-table td{padding:.6rem .75rem;border-bottom:1px solid var(--border);vertical-align:middle}
+    .email-table tr:hover{background:rgba(255,255,255,.02)}
+    .email-status{display:inline-flex;align-items:center;gap:.3rem;padding:.2rem .5rem;border-radius:4px;font-size:.8rem;font-weight:500}
+    .email-status.valid{background:rgba(34,197,94,.15);color:var(--green)}
+    .email-status.invalid{background:rgba(239,68,68,.15);color:var(--red)}
+    .email-status.unknown{background:rgba(234,179,8,.15);color:var(--yellow)}
+    .email-status.error{background:rgba(113,113,122,.15);color:var(--muted)}
+    .email-disposable{color:var(--red);font-size:.75rem;font-weight:500}
+    .remaining-badge{display:inline-flex;align-items:center;gap:.3rem;padding:.3rem .7rem;border-radius:12px;font-size:.8rem;font-weight:500;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);color:#3b82f6}
+
+    @media(max-width:640px){.container{padding:1rem}header h1{font-size:1.75rem}.form-row{flex-direction:column}.stats-bar{flex-direction:column}.export-bar{flex-direction:column}.scores{flex-direction:column;align-items:flex-end}.email-table{font-size:.75rem}.email-table th,.email-table td{padding:.4rem .5rem}}
+  </style>
+</head>
+<body>
+  <div class="gradient-bg"></div>
+  <div class="container">
+    <header>
+      <h1>LeadScraper AI</h1>
+      <p>Scrape → Qualify → Enrich → SEO Score — all in one click</p>
+    </header>
+
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('scrape')">🔍 Lead Scraper</div>
+      <div class="tab" onclick="switchTab('validate')">✉️ Email Validator</div>
+    </div>
+
+    <!-- ─── LEAD SCRAPER PANEL ─── -->
+    <div id="panel-scrape" class="panel active">
+      <div class="search-box">
+        <div class="form-row">
+          <div class="form-group"><label>Search Query</label><input type="text" id="query" placeholder="e.g. interior designer, dentist, restaurant"></div>
+          <div class="form-group"><label>Location</label><input type="text" id="location" placeholder="e.g. Noida, New York, London"></div>
+        </div>
+        <button class="btn btn-primary" id="btn-run" onclick="runPipeline()"><span id="btn-text">🔍 Run Full Pipeline</span></button>
+        <div class="pipeline-status" id="status-bar">
+          <div class="step" id="step-scrape">🔍 Scrape</div><span class="arrow">→</span>
+          <div class="step" id="step-qualify">🧠 Qualify</div><span class="arrow">→</span>
+          <div class="step" id="step-enrich">📡 Enrich + SEO</div>
+        </div>
+      </div>
+
+      <div id="stats" class="stats-bar" style="display:none"></div>
+      <div id="export" class="export-bar" style="display:none">
+        <button class="btn-export" onclick="exportJSON()">📄 All JSON</button>
+        <button class="btn-export" onclick="exportCSV()">📊 All CSV</button>
+        <button class="btn-export" onclick="exportQualifiedJSON()">📄 Qualified JSON</button>
+        <button class="btn-export" onclick="exportQualifiedCSV()">📊 Qualified CSV</button>
+      </div>
+      <div id="filter-bar-container" style="display:none">
+        <div class="filter-bar">
+          <span style="font-size:.8rem;color:var(--muted)">Show:</span>
+          <div class="filter-pill active" onclick="setFilter('all')">All (<span id="f-all">0</span>)</div>
+          <div class="filter-pill" onclick="setFilter('qualified')">✅ Qualified (<span id="f-qualified">0</span>)</div>
+          <div class="filter-pill" onclick="setFilter('not-qualified')">❌ Not Qualified (<span id="f-notq">0</span>)</div>
+          <div class="filter-pill" onclick="setFilter('no-website')">🌐 No Website (<span id="f-noweb">0</span>)</div>
+          <div class="filter-pill" onclick="setFilter('has-emails')">✉️ Has Emails (<span id="f-email">0</span>)</div>
+        </div>
+      </div>
+      <div id="results" class="results"></div>
+    </div>
+
+    <!-- ─── EMAIL VALIDATOR PANEL ─── -->
+    <div id="panel-validate" class="panel">
+      <div class="search-box">
+        <div class="upload-zone" id="upload-zone" onclick="document.getElementById('csv-file').click()">
+          <div class="upload-icon">📄</div>
+          <div class="upload-text">Click or drag a CSV file here to validate emails</div>
+          <div style="font-size:.75rem;color:var(--muted);margin-top:.5rem">Powered by MailRook — Max 25 emails/day (free tier)</div>
+        </div>
+        <input type="file" id="csv-file" accept=".csv" style="display:none" onchange="handleCSVUpload(event)">
+        <div id="column-select" style="display:none">
+          <div class="form-group" style="margin-bottom:1rem">
+            <label>Select Email Column</label>
+            <select id="email-column" onchange="previewEmails()"></select>
+          </div>
+          <div id="email-preview" style="margin-bottom:1rem"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+            <div class="remaining-badge" id="remaining-badge">📬 25/25 remaining today</div>
+            <button class="btn btn-primary" style="width:auto;padding:.7rem 2rem" id="btn-validate" onclick="validateEmails()"><span id="btn-validate-text">✉️ Validate Emails</span></button>
+          </div>
+        </div>
+      </div>
+      <div id="validation-results"></div>
+    </div>
+  </div>
+
+  <script>
+    const API='';
+    let allData=[];
+    let filteredData=[];
+    let currentFilter='all';
+    let csvRows=[];
+    let csvHeaders=[];
+
+    // ─── Tab switching ───
+    function switchTab(tab){
+      document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===(tab==='scrape'?0:1)));
+      document.getElementById('panel-scrape').classList.toggle('active',tab==='scrape');
+      document.getElementById('panel-validate').classList.toggle('active',tab==='validate');
+    }
+
+    function setStep(id,state){document.getElementById(id).className='step '+state}
+    function setLoading(on){const b=document.getElementById('btn-run'),t=document.getElementById('btn-text');b.disabled=on;t.innerHTML=on?'<span class="spinner"></span> Running pipeline...':'🔍 Run Full Pipeline'}
+
+    function dl(name,content,type){const b=new Blob([content],{type}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u)}
+    function exportJSON(){if(!allData.length)return;dl('leads-'+Date.now()+'.json',JSON.stringify(allData,null,2),'application/json')}
+    function exportQualifiedJSON(){const q=allData.filter(d=>d.qualified);if(!q.length)return;dl('leads-qualified-'+Date.now()+'.json',JSON.stringify(q,null,2),'application/json')}
+
+    function csvEscape(v){return'"'+String(v||'').replace(/"/g,'""')+'"'}
+
+    function buildCSV(data){
+      const h=['Name','Rating','Reviews','Address','Phone','URL','Website','Has Website','Qualified','Score','Reason','Industry','Potential Need','Pitch Angle','SEO Score','Overall Score','SEO Issues','Emails','Twitter','LinkedIn','Instagram','Facebook','YouTube'];
+      const rows=data.map(d=>{
+        const l=d.lead||{},e=d.enrichment||{},s=e.seoScores||{};
+        return[csvEscape(l.name),csvEscape(l.rating),csvEscape(l.reviews),csvEscape(l.address),csvEscape(l.phone),csvEscape(l.url),csvEscape(l.website),csvEscape(l.website?'Yes':'No'),csvEscape(d.qualified?'Yes':'No'),csvEscape(d.score),csvEscape(d.reason),csvEscape(d.industry),csvEscape(d.potentialNeed),csvEscape(d.pitchAngle),csvEscape(s.seoScore),csvEscape(s.overallScore),csvEscape((s.seoIssues||[]).join('; ')),csvEscape((e.emails||[]).join('; ')),csvEscape(e.social?.twitter),csvEscape(e.social?.linkedin),csvEscape(e.social?.instagram),csvEscape(e.social?.facebook),csvEscape(e.social?.youtube)].join(',')
+      });
+      return[h.join(','),...rows].join('\n')
+    }
+
+    function exportCSV(){if(!allData.length)return;dl('leads-'+Date.now()+'.csv',buildCSV(allData),'text/csv')}
+    function exportQualifiedCSV(){const q=allData.filter(d=>d.qualified);if(!q.length)return;dl('leads-qualified-'+Date.now()+'.csv',buildCSV(q),'text/csv')}
+
+    async function runPipeline(){
+      const query=document.getElementById('query').value.trim(),location=document.getElementById('location').value.trim();
+      if(!query||!location)return alert('Enter both query and location');
+      setLoading(true);allData=[];filteredData=[];currentFilter='all';
+      document.getElementById('results').innerHTML='';
+      document.getElementById('stats').style.display='none';
+      document.getElementById('export').style.display='none';
+      document.getElementById('filter-bar-container').style.display='none';
+      setStep('step-scrape','active');setStep('step-qualify','');setStep('step-enrich','');
+
+      try{
+        const sr=await fetch(`${API}/api/scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query,location})});
+        const sd=await sr.json();if(sd.error)throw new Error(sd.error);
+        const leads=sd.leads||[];
+        if(!leads.length){setStep('step-scrape','fail');document.getElementById('results').innerHTML='<div class="empty"><div class="empty-icon">🔍</div>No leads found. Try different search terms.</div>';setLoading(false);return}
+        setStep('step-scrape','done');
+
+        setStep('step-qualify','active');
+        const qualified=[];
+        for(let i=0;i<leads.length;i++){
+          try{
+            const fr=await fetch(`${API}/api/filter`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(leads[i])});
+            const fd=await fr.json();
+            if(!fd.error){
+              qualified.push(fd);
+            }
+            document.getElementById('results').innerHTML=`<div class="empty"><div class="spinner"></div><div style="margin-top:1rem">Qualifying leads... ${i+1}/${leads.length}</div></div>`;
+          }catch{continue}
+        }
+        setStep('step-qualify','done');
+
+        setStep('step-enrich','active');
+        for(let i=0;i<qualified.length;i++){
+          try{
+            const er=await fetch(`${API}/api/enrich`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(qualified[i].lead)});
+            const ed=await er.json();
+            qualified[i].enrichment=ed.enrichment||{};
+            qualified[i].lead={...qualified[i].lead,...(ed.lead||{})};
+            document.getElementById('results').innerHTML=`<div class="empty"><div class="spinner"></div><div style="margin-top:1rem">Enriching + SEO scoring... ${i+1}/${qualified.length}</div></div>`;
+          }catch{qualified[i].enrichment={emails:[],social:{},website:'',seoData:null,seoScores:null}}
+        }
+        setStep('step-enrich','done');
+
+        // Sort: qualified first, then by score descending
+        allData=qualified.sort((a,b)=>{
+          if(a.qualified!==b.qualified) return b.qualified-a.qualified;
+          return (b.score||0)-(a.score||0);
+        });
+        filteredData=[...allData];
+        renderResults(allData,leads.length);
+      }catch(e){
+        document.getElementById('results').innerHTML=`<div class="error-box">⚠️ ${e.message}</div>`;
+        setStep('step-scrape','fail');
+      }
+      setLoading(false);
+    }
+
+    function scoreClass(s){return s>=7?'high':s>=4?'med':'low'}
+    function seoClass(s){return s>=7?'good':s>=4?'ok':'bad'}
+
+    function setFilter(filter){
+      currentFilter=filter;
+      document.querySelectorAll('.filter-pill').forEach(p=>p.classList.remove('active'));
+      event.target.classList.add('active');
+
+      if(filter==='all') filteredData=[...allData];
+      else if(filter==='qualified') filteredData=allData.filter(d=>d.qualified);
+      else if(filter==='not-qualified') filteredData=allData.filter(d=>!d.qualified);
+      else if(filter==='no-website') filteredData=allData.filter(d=>!d.lead?.website&&!d.enrichment?.website);
+      else if(filter==='has-emails') filteredData=allData.filter(d=>d.enrichment?.emails?.length>0);
+
+      renderLeadCards(filteredData);
+    }
+
+    function renderResults(data,totalScraped){
+      const qCount=data.filter(d=>d.qualified).length;
+      const nqCount=data.filter(d=>!d.qualified).length;
+      const wEmails=data.filter(d=>d.enrichment?.emails?.length).length;
+      const wSocial=data.filter(d=>{const s=d.enrichment?.social||{};return s.twitter||s.linkedin||s.instagram||s.facebook}).length;
+      const wSEO=data.filter(d=>d.enrichment?.seoScores?.seoScore).length;
+      const noWeb=data.filter(d=>!d.lead?.website&&!d.enrichment?.website).length;
+
+      document.getElementById('stats').style.display='flex';
+      document.getElementById('stats').innerHTML=`
+        <div class="stat"><div class="stat-num purple">${totalScraped}</div><div class="stat-label">Scraped</div></div>
+        <div class="stat"><div class="stat-num green">${qCount}</div><div class="stat-label">Qualified</div></div>
+        <div class="stat"><div class="stat-num red">${nqCount}</div><div class="stat-label">Not Qualified</div></div>
+        <div class="stat"><div class="stat-num yellow">${noWeb}</div><div class="stat-label">No Website</div></div>
+        <div class="stat"><div class="stat-num blue">${wEmails}</div><div class="stat-label">With Emails</div></div>
+      `;
+      document.getElementById('export').style.display='flex';
+      document.getElementById('filter-bar-container').style.display='block';
+
+      document.getElementById('f-all').textContent=data.length;
+      document.getElementById('f-qualified').textContent=qCount;
+      document.getElementById('f-notq').textContent=nqCount;
+      document.getElementById('f-noweb').textContent=noWeb;
+      document.getElementById('f-email').textContent=wEmails;
+
+      renderLeadCards(data);
+    }
+
+    function renderLeadCards(data){
+      if(!data.length){document.getElementById('results').innerHTML='<div class="empty"><div class="empty-icon">🤔</div>No leads match this filter.</div>';return}
+
+      document.getElementById('results').innerHTML=data.map(d=>{
+        const l=d.lead||{},e=d.enrichment||{},s=e.seoScores||{},seo=e.seoData||{};
+        const hasWeb=!!(l.website||e.website);
+        const qBadge=d.qualified
+          ?`<div class="score-badge qualified">✅ Qualified</div>`
+          :`<div class="score-badge not-qualified">❌ Not Qualified</div>`;
+        const webBadge=!hasWeb?`<div class="score-badge no-website">🌐 No Website</div>`:'';
+
+        return`
+        <div class="lead-card ${d.qualified?'':'not-qualified'}">
+          <div class="lead-top">
+            <div class="lead-name">${l.name||'Unknown'}</div>
+            <div class="scores">
+              ${webBadge}
+              ${s.seoScore?`<div class="score-badge ${seoClass(s.seoScore)}">🔍 SEO ${s.seoScore}/10</div>`:''}
+              <div class="score-badge ${scoreClass(d.score)}">⭐ ${d.score||0}/10</div>
+              ${qBadge}
+            </div>
+          </div>
+          <div class="lead-meta">
+            ${l.rating?`<span class="meta-tag">⭐ ${l.rating} (${l.reviews||0})</span>`:''}
+            ${l.phone?`<span class="meta-tag">📞 ${l.phone}</span>`:''}
+            ${d.industry?`<span class="meta-tag">🏢 ${d.industry}</span>`:''}
+          </div>
+          ${l.address?`<div class="detail-row"><span class="detail-label">Address</span><span class="detail-val">${l.address}</span></div>`:''}
+
+          <div class="reason-box">
+            <div class="reason-label">📋 Why This Score</div>
+            ${d.reason||'No reason provided'}
+          </div>
+
+          ${d.potentialNeed?`<div class="detail-row" style="margin-top:.5rem"><span class="detail-label">Need</span><span class="detail-val">${d.potentialNeed}</span></div>`:''}
+          ${d.pitchAngle?`<div class="pitch-box"><div class="pitch-label">💡 Pitch Angle</div>${d.pitchAngle}</div>`:''}
+
+          ${l.url?`<div class="detail-row" style="margin-top:.5rem"><span class="detail-label">Maps</span><span class="detail-val"><a href="${l.url}" target="_blank">Open in Google Maps →</a></span></div>`:''}
+          ${l.website?`<div class="detail-row"><span class="detail-label">Website</span><span class="detail-val"><a href="${l.website}" target="_blank">${l.website}</a></span></div>`:''}
+
+          <div class="lead-detail">
+            ${s.seoScore?`
+            <div class="seo-box">
+              <div class="seo-header">
+                <span class="seo-score-pill ${seoClass(s.seoScore)}">🔍 SEO: ${s.seoScore}/10</span>
+                <span class="seo-score-pill ${seoClass(s.overallScore)}">📊 Overall: ${s.overallScore}/10</span>
+                ${seo.h1Count!==undefined?`<span class="meta-tag">H1: ${seo.h1Count}</span>`:''}
+                ${seo.imagesTotal!==undefined?`<span class="meta-tag">Images: ${seo.imagesTotal}</span>`:''}
+                ${seo.hasViewport!==undefined?`<span class="meta-tag">${seo.hasViewport?'✅ Mobile':'❌ No Mobile'}</span>`:''}
+                ${seo.hasSchemaMarkup!==undefined?`<span class="meta-tag">${seo.hasSchemaMarkup?'✅ Schema':'❌ No Schema'}</span>`:''}
+              </div>
+              ${s.summary?`<div style="font-size:.8rem;color:var(--muted);margin-bottom:.5rem;line-height:1.5">${s.summary}</div>`:''}
+              ${s.seoIssues?.length?`<div class="seo-issues">${s.seoIssues.map(i=>`<span class="seo-issue">⚠ ${i}</span>`).join('')}</div>`:''}
+              ${s.improvements?.length?`<div class="seo-issues" style="margin-top:.3rem">${s.improvements.map(i=>`<span class="seo-fix">✓ ${i}</span>`).join('')}</div>`:''}
+            </div>`:''}
+            ${e.emails?.length?`<div style="margin-top:.75rem">${e.emails.map(em=>`<span class="email-pill">✉️ ${em}</span> `).join('')}</div>`:''}
+            ${(e.social?.twitter||e.social?.linkedin||e.social?.instagram||e.social?.facebook||e.social?.youtube)?`
+              <div class="social-row">
+                ${e.social.twitter?`<a class="social-pill" href="https://twitter.com/${e.social.twitter}" target="_blank">🐦 @${e.social.twitter}</a>`:''}
+                ${e.social.linkedin?`<a class="social-pill" href="https://linkedin.com/in/${e.social.linkedin}" target="_blank">💼 ${e.social.linkedin}</a>`:''}
+                ${e.social.instagram?`<a class="social-pill" href="https://instagram.com/${e.social.instagram}" target="_blank">📸 ${e.social.instagram}</a>`:''}
+                ${e.social.facebook?`<a class="social-pill" href="https://facebook.com/${e.social.facebook}" target="_blank">📘 ${e.social.facebook}</a>`:''}
+                ${e.social.youtube?`<a class="social-pill" href="https://youtube.com/@${e.social.youtube}" target="_blank">🎬 ${e.social.youtube}</a>`:''}
+              </div>`:''}
+          </div>
+        </div>`}).join('');
+    }
+
+    // ─── EMAIL VALIDATOR ───
+    const uploadZone=document.getElementById('upload-zone');
+    uploadZone.addEventListener('dragover',e=>{e.preventDefault();uploadZone.classList.add('dragover')});
+    uploadZone.addEventListener('dragleave',()=>uploadZone.classList.remove('dragover'));
+    uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.classList.remove('dragover');if(e.dataTransfer.files.length)parseCSV(e.dataTransfer.files[0])});
+
+    function handleCSVUpload(e){if(e.target.files.length)parseCSV(e.target.files[0])}
+
+    function parseCSV(file){
+      const reader=new FileReader();
+      reader.onload=e=>{
+        const text=e.target.result;
+        const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
+        if(lines.length<2){alert('CSV has no data rows');return}
+        // Simple CSV parse (handles quoted fields)
+        csvHeaders=parseCSVLine(lines[0]);
+        csvRows=[];
+        for(let i=1;i<lines.length;i++){
+          csvRows.push(parseCSVLine(lines[i]));
+        }
+        // Populate column dropdown
+        const sel=document.getElementById('email-column');
+        sel.innerHTML=csvHeaders.map((h,i)=>`<option value="${i}">${h}</option>`).join('');
+        // Auto-detect email column
+        const emailIdx=csvHeaders.findIndex(h=>/email/i.test(h));
+        if(emailIdx>=0) sel.value=emailIdx;
+        document.getElementById('column-select').style.display='block';
+        document.getElementById('upload-zone').style.display='none';
+        previewEmails();
+      };
+      reader.readAsText(file);
+    }
+
+    function parseCSVLine(line){
+      const result=[];
+      let current='';
+      let inQuotes=false;
+      for(let i=0;i<line.length;i++){
+        const c=line[i];
+        if(inQuotes){
+          if(c==='"'&&line[i+1]==='"'){current+='"';i++}
+          else if(c==='"') inQuotes=false;
+          else current+=c;
+        }else{
+          if(c==='"') inQuotes=true;
+          else if(c===','){result.push(current.trim());current=''}
+          else current+=c;
+        }
+      }
+      result.push(current.trim());
+      return result;
+    }
+
+    function previewEmails(){
+      const col=parseInt(document.getElementById('email-column').value);
+      const emails=csvRows.map(r=>r[col]).filter(e=>e&&e.includes('@'));
+      const preview=emails.slice(0,5);
+      const unique=[...new Set(emails)];
+      const toValidate=Math.min(unique.length,25);
+      document.getElementById('email-preview').innerHTML=`
+        <div style="font-size:.85rem;color:var(--muted);margin-bottom:.5rem">
+          Found <strong style="color:var(--text)">${unique.length}</strong> unique emails (${emails.length} total) |
+          Will validate <strong style="color:var(--accent)">${toValidate}</strong> (daily limit: 25)
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:.3rem">
+          ${preview.map(e=>`<span class="email-pill">✉️ ${e}</span>`).join('')}
+          ${unique.length>5?`<span class="meta-tag">+${unique.length-5} more</span>`:''}
+        </div>
+      `;
+    }
+
+    async function validateEmails(){
+      const col=parseInt(document.getElementById('email-column').value);
+      const emails=[...new Set(csvRows.map(r=>r[col]).filter(e=>e&&e.includes('@')))];
+      if(!emails.length){alert('No valid emails found in selected column');return}
+
+      const btn=document.getElementById('btn-validate');
+      const txt=document.getElementById('btn-validate-text');
+      btn.disabled=true;txt.innerHTML='<span class="spinner"></span> Validating...';
+
+      try{
+        const resp=await fetch(`${API}/api/validate-emails`,{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({emails})
+        });
+        const data=await resp.json();
+        if(data.error)throw new Error(data.error);
+        renderValidationResults(data);
+        // Update remaining badge
+        document.getElementById('remaining-badge').innerHTML=`📬 ${data.summary.remainingToday}/${data.summary.dailyLimit} remaining today`;
+      }catch(e){
+        document.getElementById('validation-results').innerHTML=`<div class="error-box">⚠️ ${e.message}</div>`;
+      }
+      btn.disabled=false;txt.innerHTML='✉️ Validate Emails';
+    }
+
+    function renderValidationResults(data){
+      const {results,summary}=data;
+      document.getElementById('validation-results').innerHTML=`
+        <div class="validation-summary">
+          <div class="v-stat"><div class="v-stat-num" style="color:var(--text)">${summary.total}</div><div class="v-stat-label">Total</div></div>
+          <div class="v-stat"><div class="v-stat-num" style="color:var(--green)">${summary.valid}</div><div class="v-stat-label">✅ Deliverable</div></div>
+          <div class="v-stat"><div class="v-stat-num" style="color:var(--yellow)">${summary.risky}</div><div class="v-stat-label">⚠️ Risky</div></div>
+          <div class="v-stat"><div class="v-stat-num" style="color:var(--red)">${summary.invalid}</div><div class="v-stat-label">❌ Invalid</div></div>
+          <div class="v-stat"><div class="v-stat-num" style="color:var(--muted)">${summary.unknown}</div><div class="v-stat-label">❓ Unknown</div></div>
+          <div class="v-stat"><div class="v-stat-num" style="color:var(--red)">${summary.disposable}</div><div class="v-stat-label">🗑️ Disposable</div></div>
+        </div>
+        <div style="overflow-x:auto">
+        <table class="email-table">
+          <thead><tr><th>Email</th><th>Result</th><th>Score</th><th>Reason</th><th>Provider</th><th>Format</th><th>Deliverable</th><th>Catch-All</th><th>Disposable</th><th>Protection</th></tr></thead>
+          <tbody>
+            ${results.map(r=>{
+              const resultClass=r.result==='deliverable'?'valid':r.result==='undeliverable'?'invalid':r.result==='risky'?'unknown':'error';
+              const resultLabel=r.result==='deliverable'?'✅ Deliverable':r.result==='undeliverable'?'❌ Undeliverable':r.result==='risky'?'⚠️ Risky':'❓ Unknown';
+              return`
+              <tr>
+                <td style="font-family:monospace;font-size:.8rem">${r.email}</td>
+                <td><span class="email-status ${resultClass}">${resultLabel}</span></td>
+                <td style="font-weight:600">${r.score!==null?r.score+'/100':'—'}</td>
+                <td style="font-size:.75rem;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.reasonLabel||r.reason||''}">${r.reasonLabel||r.reason||'—'}</td>
+                <td style="font-size:.8rem">${r.provider||'—'}</td>
+                <td>${r.isFormat===true?'✅':r.isFormat===false?'❌':'—'}</td>
+                <td>${r.isDeliverable===true?'✅':r.isDeliverable===false?'❌':'—'}</td>
+                <td>${r.isNoCatchall===true?'✅ No':r.isNoCatchall===false?'⚠️ Yes':'—'}</td>
+                <td>${r.isNoDisposable===false?'<span class="email-disposable">⚠️ Yes</span>':'No'}</td>
+                <td style="font-size:.75rem">${r.protectionLevel||'—'}</td>
+              </tr>`}).join('')}
+          </tbody>
+        </table>
+        </div>
+        <div style="margin-top:1rem;text-align:center">
+          <button class="btn-export" onclick="exportValidationCSV()" style="display:inline-flex;width:auto">📊 Export Validation CSV</button>
+        </div>
+      `;
+    }
+
+    function exportValidationCSV(){
+      const rows=document.querySelectorAll('.email-table tbody tr');
+      if(!rows.length)return;
+      const h=['Email','Result','Score','Reason','Provider','Format Valid','Deliverable','Catch-All','Disposable','Protection Level'];
+      const data=[];
+      rows.forEach(r=>{
+        const cells=r.querySelectorAll('td');
+        data.push([cells[0]?.textContent,cells[1]?.textContent,cells[2]?.textContent,cells[3]?.textContent,cells[4]?.textContent,cells[5]?.textContent,cells[6]?.textContent,cells[7]?.textContent,cells[8]?.textContent,cells[9]?.textContent].map(csvEscape).join(','));
+      });
+      dl('email-validation-'+Date.now()+'.csv',[h.join(','),...data].join('\n'),'text/csv');
+    }
+  </script>
+</body>
+</html>
