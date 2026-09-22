@@ -146,10 +146,61 @@ app.post("/api/scrape", async (req, res) => {
   }
 });
 
+function ruleBasedQualify(lead) {
+  const name = (lead.name || "").toLowerCase();
+  const category = (lead.category || "").toLowerCase();
+  const text = `${name} ${category}`;
+
+  const excluded = ["government", "municipal", "police station", "post office", "railway station", "bus stand", "public school", "ngo", "temple", "mosque", "church ", "gurudwara", "gram panchayat", "court"];
+  for (const ex of excluded) {
+    if (text.includes(ex)) {
+      return { qualified: false, score: 2, reason: "Public/government entity - not a web dev prospect", industry: lead.category || "Public", potentialNeed: "None", pitchAngle: "" };
+    }
+  }
+
+  let score = 6;
+  if (!lead.website) score += 2;
+  if (lead.phone) score += 1;
+  const rating = parseFloat(lead.rating);
+  if (!isNaN(rating) && rating >= 4) score += 1;
+  const reviews = parseInt(String(lead.reviews || "").replace(/,/g, ""));
+  if (!isNaN(reviews) && reviews >= 10) score += 1;
+  score = Math.min(10, Math.max(1, score));
+
+  const industry = lead.category || detectIndustry(text);
+  const need = !lead.website ? "New business website + Google profile setup" : "Website redesign + SEO + lead generation";
+  return {
+    qualified: score >= 5,
+    score,
+    reason: !lead.website ? "No website found - high priority for web dev pitch" : "Local business likely needs better web presence and SEO",
+    industry,
+    potentialNeed: need,
+    pitchAngle: `Offer ${need.toLowerCase()} to ${lead.name}`
+  };
+}
+
+function detectIndustry(text) {
+  if (/restaurant|cafe|food|bakery|pizza|diner|dhaba/.test(text)) return "Restaurant / Food";
+  if (/salon|spa|barber|beauty|parlor/.test(text)) return "Salon / Beauty";
+  if (/dent|clinic|doctor|hospital|physio|dental/.test(text)) return "Healthcare";
+  if (/law|advocate|legal/.test(text)) return "Legal";
+  if (/gym|fitness|yoga/.test(text)) return "Fitness";
+  if (/hotel|guest|resort|stay/.test(text)) return "Hospitality";
+  if (/school|coach|tuition|training|college/.test(text)) return "Education";
+  if (/real estate|property|builder|construction|contractor|interior/.test(text)) return "Real Estate / Construction";
+  if (/shop|store|retail|boutique|mart|jewel|fashion|clothing/.test(text)) return "Retail";
+  if (/auto|car|garage|repair|service/.test(text)) return "Automotive Services";
+  return "Local Business";
+}
+
+const GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"];
+
 app.post("/api/filter", async (req, res) => {
   const lead = req.body;
   if (!lead || !lead.name) return res.status(400).json({ error: "Lead with name required" });
-  if (!groq) return res.status(500).json({ error: "GROQ_API_KEY not configured" });
+  if (!groq) {
+    return res.status(200).json({ lead, ...ruleBasedQualify(lead), fallback: "rule-based (no GROQ_API_KEY)" });
+  }
 
   try {
     const prompt = `You are a B2B sales qualification expert. A web development agency wants to pitch their services (website design, web apps, ecommerce, SEO) to local businesses.
@@ -184,16 +235,25 @@ Return ONLY valid JSON:
   "pitchAngle": "How to approach them for web dev pitch"
 }`;
 
-    const completion = await groq.chat.completions.create({
-      messages: [{ role: "user", content: prompt }],
-      model: "llama-3.3-70b-versatile",
-      temperature: 0.3,
-      max_tokens: 600
-    });
+    let content = "";
+    let lastError = "";
+    for (const model of GROQ_MODELS) {
+      try {
+        const completion = await groq.chat.completions.create({
+          messages: [{ role: "user", content: prompt }],
+          model,
+          temperature: 0.3,
+          max_tokens: 600
+        });
+        content = completion.choices[0]?.message?.content || "";
+        if (content) break;
+      } catch (e) {
+        lastError = e.message;
+      }
+    }
 
-    const content = completion.choices[0].message.content;
     if (!content) {
-      return res.status(200).json({ lead, qualified: false, score: 0, reason: "Empty AI response", industry: "", potentialNeed: "", pitchAngle: "" });
+      return res.status(200).json({ lead, ...ruleBasedQualify(lead), fallback: "rule-based (AI failed: " + lastError + ")" });
     }
 
     let decision;
@@ -202,6 +262,11 @@ Return ONLY valid JSON:
       decision = jsonMatch ? JSON.parse(jsonMatch[0]) : { qualified: false, score: 0, reason: "Could not parse response" };
     } catch {
       decision = { qualified: false, score: 0, reason: "Invalid JSON from AI" };
+    }
+
+    // If AI returned unparseable/empty result, fall back to rules so pipeline never yields 0
+    if (!decision.reason && !decision.industry && !decision.score) {
+      return res.status(200).json({ lead, ...ruleBasedQualify(lead), fallback: "rule-based (AI unparseable)" });
     }
 
     return res.status(200).json({
@@ -214,7 +279,7 @@ Return ONLY valid JSON:
       pitchAngle: String(decision.pitchAngle || "")
     });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(200).json({ lead, ...ruleBasedQualify(lead), fallback: "rule-based (error: " + error.message + ")" });
   }
 });
 
