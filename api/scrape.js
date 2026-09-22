@@ -1,6 +1,10 @@
-import puppeteer from "puppeteer";
+import chromium from "@sparticuz/chromium";
+import puppeteer from "puppeteer-core";
+
+export const maxDuration = 60;
 
 const GOOGLE_MAPS_URL = "https://www.google.com/maps/search/";
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -15,42 +19,57 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { query, location } = req.body;
+  const { query, location, limit } = req.body || {};
 
   if (!query || !location) {
     return res.status(400).json({ error: "query and location are required" });
   }
 
+  const maxLeads = Math.min(parseInt(limit) || 15, 20);
+
   let browser;
   try {
     browser = await puppeteer.launch({
-      headless: "new",
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
     });
 
     const page = await browser.newPage();
-    await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    );
 
     const search = encodeURIComponent(`${query} in ${location}`);
-    await page.goto(`${GOOGLE_MAPS_URL}${search}`, { waitUntil: "networkidle2", timeout: 30000 });
+    await page.goto(`${GOOGLE_MAPS_URL}${search}`, {
+      waitUntil: "domcontentloaded",
+      timeout: 25000,
+    });
 
-    await page.evaluate(() => new Promise(r => setTimeout(r, 3000)));
+    await sleep(2500);
 
-    for (let i = 0; i < 5; i++) {
-      await page.evaluate(() => window.scrollBy(0, window.innerHeight));
-      await new Promise(r => setTimeout(r, 1000));
+    for (let i = 0; i < 3; i++) {
+      await page.evaluate(() => {
+        const feed = document.querySelector('[role="feed"]');
+        if (feed) feed.scrollTop = feed.scrollHeight;
+      });
+      await sleep(800);
     }
 
-    const leads = await page.evaluate(() => {
+    const leads = await page.evaluate((max) => {
       const results = [];
       const seenNames = new Set();
-      const items = document.querySelectorAll('[role="feed"] > div > div');
+      const feed = document.querySelector('[role="feed"]');
+      if (!feed) return results;
+      const items = feed.querySelectorAll(":scope > div > div");
 
-      items.forEach(item => {
-        const nameEl = item.querySelector(".fontHeadlineSmall, .qBF1Pd, .NrDZNb, .dbg0pd, [class*='fontHeadlineSmall']");
-        if (!nameEl) return;
+      for (const item of items) {
+        if (results.length >= max) break;
+        const nameEl = item.querySelector(".fontHeadlineSmall, .qBF1Pd, .NrDZNb, .dbg0pd");
+        if (!nameEl) continue;
         const name = nameEl.innerText.trim();
-        if (!name || seenNames.has(name)) return;
+        if (!name || seenNames.has(name)) continue;
         seenNames.add(name);
 
         const allText = item.innerText || "";
@@ -74,33 +93,16 @@ export default async function handler(req, res) {
         const linkEl = item.querySelector("a.hfpxzc, a[href*='maps']");
         if (linkEl) url = linkEl.href;
 
-        if (!category && allText) {
-          const lines = allText.split('\n').map(l => l.trim()).filter(Boolean);
-          for (const line of lines) {
-            if (!address && /\d+.*(?:street|road|avenue|drive|boulevard|lane|st|rd|ave|dr|blvd|way|ln)/i.test(line)) {
-              address = line;
-            }
-          }
-        }
-
-        results.push({
-          name,
-          rating,
-          reviews,
-          category,
-          address,
-          phone,
-          url
-        });
-      });
+        results.push({ name, rating, reviews, category, address, phone, url });
+      }
 
       return results;
-    });
+    }, maxLeads);
 
     await browser.close();
-    return res.status(200).json({ leads });
+    return res.status(200).json({ leads, query, location });
   } catch (error) {
-    if (browser) await browser.close();
-    return res.status(500).json({ error: error.message });
+    if (browser) await browser.close().catch(() => {});
+    return res.status(500).json({ error: error.message || "Scrape failed" });
   }
 }

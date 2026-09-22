@@ -2,7 +2,7 @@ import express from "express";
 import axios from "axios";
 import * as cheerio from "cheerio";
 import Groq from "groq-sdk";
-import puppeteer from "puppeteer";
+import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
@@ -36,8 +36,9 @@ app.get("/api", (req, res) => {
 });
 
 app.post("/api/scrape", async (req, res) => {
-  const { query, location } = req.body;
+  const { query, location, limit } = req.body;
   if (!query || !location) return res.status(400).json({ error: "query and location required" });
+  const maxLeads = Math.min(parseInt(limit) || 15, 20);
 
   let browser;
   try {
@@ -53,19 +54,19 @@ app.post("/api/scrape", async (req, res) => {
     await page.setViewport({ width: 1280, height: 720 });
 
     const search = encodeURIComponent(`${query} in ${location}`);
-    await page.goto(`${GOOGLE_MAPS_URL}${search}`, { waitUntil: "networkidle2", timeout: 45000 });
-    await new Promise(r => setTimeout(r, 4000));
+    await page.goto(`${GOOGLE_MAPS_URL}${search}`, { waitUntil: "domcontentloaded", timeout: 25000 });
+    await new Promise(r => setTimeout(r, 2500));
 
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 3; i++) {
       await page.evaluate(() => {
         const feed = document.querySelector('[role="feed"]');
         if (feed) feed.scrollTop = feed.scrollHeight;
         window.scrollBy(0, window.innerHeight);
       });
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise(r => setTimeout(r, 800));
     }
 
-    const leads = await page.evaluate(() => {
+    const leads = await page.evaluate((max) => {
       const results = [];
       const seenNames = new Set();
 
@@ -76,7 +77,8 @@ app.post("/api/scrape", async (req, res) => {
       // Try multiple selectors for result items
       const items = feed.querySelectorAll(':scope > div > div') || feed.querySelectorAll('.Nv2PK');
 
-      items.forEach(item => {
+      for (const item of items) {
+        if (results.length >= max) break;
         // Try multiple selectors for the business name
         const nameEl = item.querySelector('.qBF1Pd, .fontHeadlineSmall, [class*="fontHeadlineSmall"], .NrDZNb, .dbg0pd');
         if (!nameEl) return;
@@ -133,10 +135,10 @@ app.post("/api/scrape", async (req, res) => {
         }
 
         results.push({ name, rating, reviews, category, address, phone, url, website });
-      });
+      }
 
       return results;
-    });
+    }, maxLeads);
 
     await browser.close();
     return res.status(200).json({ leads, query, location });

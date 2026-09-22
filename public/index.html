@@ -155,42 +155,49 @@
       setStep('step-scrape','active');setStep('step-qualify','');setStep('step-enrich','');
 
       try{
-        const sr=await fetch(`${API}/api/scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query,location})});
+        const sr=await fetch(`${API}/api/scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query,location,limit:15})});
         const sd=await sr.json();if(sd.error)throw new Error(sd.error);
-        const leads=sd.leads||[];
+        const leads=(sd.leads||[]).slice(0,15);
         if(!leads.length){setStep('step-scrape','fail');document.getElementById('results').innerHTML='<div class="empty"><div class="empty-icon">🔍</div>No leads found. Try different search terms.</div>';setLoading(false);return}
         setStep('step-scrape','done');
 
         setStep('step-qualify','active');
         const allLeads=[];
-        for(let i=0;i<leads.length;i++){
-          try{
-            const fr=await fetch(`${API}/api/filter`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(leads[i])});
-            const fd=await fr.json();
-            if(!fd.error){
-              allLeads.push(fd);
-            }else{
-              // If AI filter failed, include the lead as unqualified with default values
-              allLeads.push({lead:leads[i],qualified:false,score:0,reason:'Filter failed: '+fd.error,industry:'',potentialNeed:'',pitchAngle:''});
+        // Qualify in parallel batches of 5 to stay fast
+        for(let b=0;b<leads.length;b+=5){
+          const batch=leads.slice(b,b+5);
+          const results=await Promise.all(batch.map(async(ld)=>{
+            try{
+              const fr=await fetch(`${API}/api/filter`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(ld)});
+              const fd=await fr.json();
+              if(!fd.error)return fd;
+              return{lead:ld,qualified:false,score:0,reason:'Filter failed: '+fd.error,industry:'',potentialNeed:'',pitchAngle:''};
+            }catch(e){
+              return{lead:ld,qualified:false,score:0,reason:'Filter request failed',industry:'',potentialNeed:'',pitchAngle:''};
             }
-            document.getElementById('results').innerHTML=`<div class="empty"><div class="spinner"></div><div style="margin-top:1rem">Qualifying leads... ${i+1}/${leads.length}</div></div>`;
-          }catch(e){
-            // On network error, still include the lead as unqualified
-            allLeads.push({lead:leads[i],qualified:false,score:0,reason:'Filter request failed',industry:'',potentialNeed:'',pitchAngle:''});
-          }
+          }));
+          allLeads.push(...results);
+          document.getElementById('results').innerHTML=`<div class="empty"><div class="spinner"></div><div style="margin-top:1rem">Qualifying leads... ${Math.min(b+5,leads.length)}/${leads.length}</div></div>`;
         }
         setStep('step-qualify','done');
 
         setStep('step-enrich','active');
-        for(let i=0;i<allLeads.length;i++){
-          try{
-            const er=await fetch(`${API}/api/enrich`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(allLeads[i].lead)});
-            const ed=await er.json();
-            allLeads[i].enrichment=ed.enrichment||{};
-            allLeads[i].lead={...allLeads[i].lead,...(ed.lead||{})};
-            document.getElementById('results').innerHTML=`<div class="empty"><div class="spinner"></div><div style="margin-top:1rem">Enriching + SEO scoring... ${i+1}/${allLeads.length}</div></div>`;
-          }catch{allLeads[i].enrichment={emails:[],social:{},website:'',seoData:null,seoScores:null}}
+        // Enrich only qualified leads (max 10) in parallel batches of 3
+        const toEnrich=allLeads.map((d,idx)=>({d,idx})).filter(x=>x.d.qualified).slice(0,10);
+        for(let b=0;b<toEnrich.length;b+=3){
+          const batch=toEnrich.slice(b,b+3);
+          await Promise.all(batch.map(async({d,idx})=>{
+            try{
+              const er=await fetch(`${API}/api/enrich`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d.lead)});
+              const ed=await er.json();
+              allLeads[idx].enrichment=ed.enrichment||{};
+              if(ed.lead)allLeads[idx].lead={...d.lead,...ed.lead};
+            }catch{allLeads[idx].enrichment={emails:[],social:{},website:d.lead.website||'',seoData:null,seoScores:null}}
+          }));
+          document.getElementById('results').innerHTML=`<div class="empty"><div class="spinner"></div><div style="margin-top:1rem">Enriching... ${Math.min(b+3,toEnrich.length)}/${toEnrich.length}</div></div>`;
         }
+        // Ensure every lead has an enrichment object
+        allLeads.forEach(d=>{if(!d.enrichment)d.enrichment={emails:[],social:{},website:d.lead.website||'',seoData:null,seoScores:null}});
         setStep('step-enrich','done');
 
         allData=allLeads;renderResults(allLeads,leads.length);

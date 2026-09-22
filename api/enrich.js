@@ -1,7 +1,23 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
 
+export const maxDuration = 30;
+
 const SEARCH_URL = "https://html.duckduckgo.com/html/";
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
+
+function extractSocials(text) {
+  const social = {};
+  const tw = text.match(/(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]+)/i);
+  if (tw) social.twitter = tw[1];
+  const li = text.match(/linkedin\.com\/(in|company)\/([a-zA-Z0-9_-]+)/i);
+  if (li) social.linkedin = li[2];
+  const ig = text.match(/instagram\.com\/([a-zA-Z0-9_.]+)/i);
+  if (ig) social.instagram = ig[1];
+  const fb = text.match(/facebook\.com\/([a-zA-Z0-9.]+)/i);
+  if (fb) social.facebook = fb[1];
+  return social;
+}
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -25,82 +41,58 @@ export default async function handler(req, res) {
   const enrichment = {
     emails: [],
     social: {},
-    website: "",
-    additionalPhones: []
+    website: lead.website || "",
+    sourceUrl: lead.url || "",
   };
 
   try {
-    const searchQuery = `"${lead.name}" ${lead.address || ""} email contact`;
-    const searchResp = await axios.get(`${SEARCH_URL}?q=${encodeURIComponent(searchQuery)}&kl=us-en`, {
-      timeout: 15000
-    });
-
-    const $ = cheerio.load(searchResp.data);
-    const links = [];
-
-    $(".result__url").each((_, el) => {
-      const href = $(el).attr("href");
-      if (href && !href.includes("duckduckgo")) {
-        links.push(href);
-      }
-    });
-
-    const uniqueLinks = [...new Set(links)].slice(0, 5);
-
-    for (const url of uniqueLinks) {
+    // Step 1: if no website, one quick DDG lookup (8s cap)
+    if (!enrichment.website) {
       try {
-        const pageResp = await axios.get(url, {
-          timeout: 8000,
-          maxRedirects: 5,
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        const searchResp = await axios.get(
+          `${SEARCH_URL}?q=${encodeURIComponent(`"${lead.name}" ${lead.address || ""} official website`)}&kl=us-en`,
+          { timeout: 8000 }
+        );
+        const $ = cheerio.load(searchResp.data);
+        $(".result__url").each((_, el) => {
+          if (enrichment.website) return;
+          const href = $(el).attr("href");
+          if (href && !href.includes("duckduckgo") && !href.includes("google") && href.startsWith("http")) {
+            enrichment.website = href;
           }
         });
-
-        const pageText = typeof pageResp.data === "string" ? pageResp.data : "";
-
-        const emailRegex = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
-        const foundEmails = pageText.match(emailRegex) || [];
-        enrichment.emails.push(...foundEmails);
-
-        const twitterRegex = /twitter\.com\/([a-zA-Z0-9_]+)/gi;
-        const twitterMatch = [...pageText.matchAll(twitterRegex)];
-        if (twitterMatch.length) {
-          enrichment.social.twitter = twitterMatch[0][1];
-        }
-
-        const linkedinRegex = /linkedin\.com\/(in|company)\/([a-zA-Z0-9\-]+)/gi;
-        const linkedinMatch = [...pageText.matchAll(linkedinRegex)];
-        if (linkedinMatch.length) {
-          enrichment.social.linkedin = linkedinMatch[0][2];
-        }
-
-        const instagramRegex = /instagram\.com\/([a-zA-Z0-9_.]+)/gi;
-        const instagramMatch = [...pageText.matchAll(instagramRegex)];
-        if (instagramMatch.length) {
-          enrichment.social.instagram = instagramMatch[0][1];
-        }
-
-        const facebookRegex = /facebook\.com\/([a-zA-Z0-9.]+)/gi;
-        const facebookMatch = [...pageText.matchAll(facebookRegex)];
-        if (facebookMatch.length) {
-          enrichment.social.facebook = facebookMatch[0][1];
-        }
-
-        const websiteMatch = pageText.match(/https?:\/\/(www\.)?[a-zA-Z0-9\-]+\.[a-z]{2,}/);
-        if (websiteMatch && !enrichment.website) {
-          enrichment.website = websiteMatch[0];
-        }
       } catch {
-        continue;
+        /* ignore - continue without website */
       }
     }
 
-    enrichment.emails = [...new Set(enrichment.emails)].slice(0, 5);
-    enrichment.sourceUrl = lead.url || "";
+    // Step 2: fetch the business website once (6s cap) for emails + socials
+    if (enrichment.website) {
+      try {
+        const siteResp = await axios.get(enrichment.website, {
+          timeout: 6000,
+          maxRedirects: 3,
+          headers: { "User-Agent": UA },
+        });
+        const html = typeof siteResp.data === "string" ? siteResp.data : "";
+        const emails = html.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
+        enrichment.emails.push(...emails);
+        Object.assign(enrichment.social, extractSocials(html));
+      } catch {
+        /* website unreachable - continue */
+      }
+    }
+
+    enrichment.emails = [...new Set(enrichment.emails)]
+      .filter((e) => !/sentry|wixpress|example\.com|godaddy|cloudflare/i.test(e))
+      .slice(0, 5);
 
     return res.status(200).json({ lead, enrichment });
   } catch (error) {
-    return res.status(500).json({ error: error.message, enrichment });
+    return res.status(200).json({
+      lead,
+      enrichment,
+      error: error.message,
+    });
   }
 }
