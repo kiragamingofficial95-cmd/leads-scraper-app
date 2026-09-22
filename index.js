@@ -153,7 +153,7 @@ function ruleBasedQualify(lead) {
   const category = (lead.category || "").toLowerCase();
   const text = `${name} ${category}`;
 
-  const excluded = ["government", "municipal", "police station", "post office", "railway station", "bus stand", "public school", "ngo", "temple", "mosque", "church ", "gurudwara", "gram panchayat", "court"];
+  const excluded = ["government", "municipal", "police station", "post office", "railway station", "bus stand", "public school", "gram panchayat", "district court", "high court", "supreme court", "temple", "mosque", "gurudwara"];
   for (const ex of excluded) {
     if (text.includes(ex)) {
       return { qualified: false, score: 2, reason: "Public/government entity - not a web dev prospect", industry: lead.category || "Public", potentialNeed: "None", pitchAngle: "" };
